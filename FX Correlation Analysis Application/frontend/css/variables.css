@@ -1,0 +1,79 @@
+/* ── Design Tokens ────────────────────────────────────── */
+:root {
+    /* Colors - Dark Mode Premium */
+    --bg-primary: #0a0e17;
+    --bg-secondary: #111827;
+    --bg-card: #1a2035;
+    --bg-elevated: #1e293b;
+    --bg-hover: #243044;
+    --bg-input: #0f172a;
+
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-default: rgba(255, 255, 255, 0.1);
+    --border-active: rgba(99, 149, 255, 0.4);
+
+    --text-primary: #f0f4f8;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-inverse: #0a0e17;
+
+    /* Accent Colors */
+    --accent-blue: #6395ff;
+    --accent-blue-dim: rgba(99, 149, 255, 0.15);
+    --accent-purple: #a78bfa;
+    --accent-green: #34d399;
+    --accent-green-dim: rgba(52, 211, 153, 0.15);
+    --accent-orange: #fb923c;
+    --accent-red: #f87171;
+    --accent-red-dim: rgba(248, 113, 113, 0.15);
+    --accent-cyan: #22d3ee;
+
+    /* Gradients */
+    --gradient-brand: linear-gradient(135deg, #6395ff 0%, #a78bfa 50%, #f472b6 100%);
+    --gradient-blue: linear-gradient(135deg, #6395ff 0%, #3b82f6 100%);
+    --gradient-green: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    --gradient-card: linear-gradient(160deg, rgba(30, 41, 59, 0.8) 0%, rgba(26, 32, 53, 0.95) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.4);
+    --shadow-glow-blue: 0 0 20px rgba(99, 149, 255, 0.2);
+    --shadow-glow-green: 0 0 20px rgba(52, 211, 153, 0.2);
+
+    /* Typography */
+    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-xs: 0.7rem;
+    --font-sm: 0.8rem;
+    --font-base: 0.9rem;
+    --font-md: 1rem;
+    --font-lg: 1.15rem;
+    --font-xl: 1.35rem;
+    --font-2xl: 1.8rem;
+
+    /* Spacing */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+    --sp-10: 40px;
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-full: 50%;
+
+    /* Layout */
+    --sidebar-width: 300px;
+    --header-height: 56px;
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.25s ease;
+    --transition-slow: 0.4s ease;
+}

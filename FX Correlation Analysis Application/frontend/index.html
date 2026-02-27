@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Forex & Crypto Correlation Analysis Platform with Super Test Mode">
+    <title>FX Correlation Analysis Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/variables.css?v=3">
+    <link rel="stylesheet" href="/css/base.css?v=3">
+    <link rel="stylesheet" href="/css/layout.css?v=3">
+    <link rel="stylesheet" href="/css/components.css?v=3">
+    <link rel="stylesheet" href="/css/charts.css?v=3">
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+</head>
+
+<body>
+    <!-- ── Header ──────────────────────────────────────── -->
+    <header id="app-header">
+        <div class="header-left">
+            <h1 class="logo">
+                <span class="logo-icon">📊</span>
+                <span class="logo-text">FX Correlation<span class="logo-accent">Platform</span></span>
+            </h1>
+        </div>
+        <div class="header-tabs" id="domain-tabs">
+            <button class="tab-btn active" data-domain="forex" id="tab-forex">
+                <span class="tab-icon">💱</span> Forex
+            </button>
+            <button class="tab-btn" data-domain="crypto" id="tab-crypto">
+                <span class="tab-icon">₿</span> Crypto Futures
+            </button>
+        </div>
+        <div class="header-right">
+            <div class="connection-status" id="connection-status">
+                <span class="status-dot"></span>
+                <span class="status-text">Ready</span>
+            </div>
+            <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
+        </div>
+    </header>
+
+    <!-- ── Main Layout ─────────────────────────────────── -->
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">📂 Data Configuration</h3>
+
+                <div class="input-group">
+                    <label for="symbol-1">Asset 1</label>
+                    <input type="text" id="symbol-1" class="input" value="XAUUSDm" placeholder="e.g. XAUUSDm">
+                </div>
+                <div class="input-group">
+                    <label for="symbol-2">Asset 2</label>
+                    <input type="text" id="symbol-2" class="input" value="USDJPYm" placeholder="e.g. USDJPYm">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">⏱️ Timeframe</h3>
+                <div class="input-group">
+                    <select id="timeframe" class="input">
+                        <option value="10s">10 Seconds</option>
+                        <option value="30s">30 Seconds</option>
+                        <option value="1min" selected>1 Minute</option>
+                        <option value="5min">5 Minutes</option>
+                        <option value="15min">15 Minutes</option>
+                        <option value="30min">30 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="4h">4 Hours</option>
+                        <option value="1D">1 Day</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">📅 Date / Time Range</h3>
+                <div class="input-group">
+                    <label for="start-date">Start Date</label>
+                    <input type="date" id="start-date" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="start-time">Start Time (UTC)</label>
+                    <input type="time" id="start-time" class="input" value="00:00">
+                </div>
+                <div class="input-group">
+                    <label for="end-date">End Date</label>
+                    <input type="date" id="end-date" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="end-time">End Time (UTC)</label>
+                    <input type="time" id="end-time" class="input" value="23:59">
+                </div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- Mode Toggle -->
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">🔬 Analysis Mode</h3>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="single" id="mode-single">Single Analysis</button>
+                    <button class="mode-btn" data-mode="compare" id="mode-compare">Compare (A/B)</button>
+                    <button class="mode-btn" data-mode="super" id="mode-super">⚡ Super Test</button>
+                </div>
+            </div>
+
+            <!-- Set B Config (hidden by default) -->
+            <div id="set-b-config" class="sidebar-section hidden">
+                <h3 class="sidebar-title">📂 Set B Configuration</h3>
+                <div class="input-group">
+                    <label for="symbol-1b">Asset 1 (B)</label>
+                    <input type="text" id="symbol-1b" class="input" value="XAUUSDm">
+                </div>
+                <div class="input-group">
+                    <label for="symbol-2b">Asset 2 (B)</label>
+                    <input type="text" id="symbol-2b" class="input" value="USDJPYm">
+                </div>
+                <div class="input-group">
+                    <label for="timeframe-b">Timeframe (B)</label>
+                    <select id="timeframe-b" class="input">
+                        <option value="10s">10 Seconds</option>
+                        <option value="30s">30 Seconds</option>
+                        <option value="1min" selected>1 Minute</option>
+                        <option value="5min">5 Minutes</option>
+                        <option value="15min">15 Minutes</option>
+                        <option value="30min">30 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="4h">4 Hours</option>
+                        <option value="1D">1 Day</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="start-date-b">Start Date (B)</label>
+                    <input type="date" id="start-date-b" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="start-time-b">Start Time (B)</label>
+                    <input type="time" id="start-time-b" class="input" value="00:00">
+                </div>
+                <div class="input-group">
+                    <label for="end-date-b">End Date (B)</label>
+                    <input type="date" id="end-date-b" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="end-time-b">End Time (B)</label>
+                    <input type="time" id="end-time-b" class="input" value="23:59">
+                </div>
+            </div>
+
+            <!-- Super Test Config (hidden by default) -->
+            <div id="super-test-config" class="sidebar-section hidden">
+                <h3 class="sidebar-title">⚡ Super Test Settings</h3>
+                <div class="input-group">
+                    <label for="st-date">Test Date</label>
+                    <input type="date" id="st-date" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="st-start">Start Time (UTC)</label>
+                    <input type="time" id="st-start" class="input" value="00:00">
+                </div>
+                <div class="input-group">
+                    <label for="st-end">End Time (UTC)</label>
+                    <input type="time" id="st-end" class="input" value="08:00">
+                </div>
+                <div class="input-group">
+                    <label for="st-interval">Interval (minutes)</label>
+                    <input type="number" id="st-interval" class="input" value="5" min="1" max="1440">
+                </div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- Fetch + Run -->
+            <div class="sidebar-section">
+                <button class="btn btn-primary" id="btn-fetch">
+                    <span class="btn-icon">📡</span> Fetch Data
+                </button>
+                <button class="btn btn-accent" id="btn-run" style="margin-top: 8px;">
+                    <span class="btn-icon">▶</span> Run Analysis
+                </button>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progress-section" class="sidebar-section hidden">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Fetching data...</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+            <!-- Welcome State -->
+            <div id="view-welcome" class="view active">
+                <div class="welcome-card">
+                    <div class="welcome-icon">📊</div>
+                    <h2>FX Correlation Analysis Platform</h2>
+                    <p>Configure your assets, timeframe, and date range in the sidebar, then click <strong>Fetch
+                            Data</strong> followed by <strong>Run Analysis</strong>.</p>
+                    <div class="welcome-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">💱</span>
+                            <span>Forex via MT5</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">₿</span>
+                            <span>Crypto via Binance</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">⚡</span>
+                            <span>Super Test Mode</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results View -->
+            <div id="view-analysis" class="view">
+                <!-- Summary Metrics -->
+                <div id="metrics-section" class="content-section">
+                    <h2 class="section-title">📌 Summary Metrics</h2>
+                    <div id="metrics-table-container"></div>
+                </div>
+
+                <!-- Charts -->
+                <div id="charts-section" class="content-section">
+                    <h2 class="section-title">📈 Asset Index Correlation</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-correlation" width="800" height="400"></canvas>
+                    </div>
+
+                    <h2 class="section-title">📉 Index Spread Over Time</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-spread" width="800" height="300"></canvas>
+                    </div>
+
+                    <h2 class="section-title">💸 Flip Loss Over Time</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-flip-loss" width="800" height="250"></canvas>
+                    </div>
+
+                    <div class="charts-row">
+                        <div class="chart-half">
+                            <h2 class="section-title">📊 Spread Distribution</h2>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-spread-dist" width="400" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-half">
+                            <h2 class="section-title">🔄 Position Breakdown</h2>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-position" width="400" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div id="data-section" class="content-section">
+                    <h2 class="section-title">🗂️ Output Data</h2>
+                    <div class="table-controls">
+                        <input type="text" id="table-search" class="input input-sm" placeholder="Search...">
+                        <button class="btn btn-sm btn-secondary" id="btn-download-csv">
+                            💾 Download CSV
+                        </button>
+                    </div>
+                    <div class="table-container" id="data-table-container">
+                        <table id="data-table" class="data-table">
+                            <thead id="data-table-head"></thead>
+                            <tbody id="data-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="table-pagination" id="pagination"></div>
+                </div>
+            </div>
+
+            <!-- Comparison View -->
+            <div id="view-compare" class="view">
+                <div id="compare-metrics-section" class="content-section">
+                    <h2 class="section-title">📌 Comparison Summary</h2>
+                    <div id="compare-metrics-container"></div>
+                </div>
+                <div class="compare-grid">
+                    <div class="compare-col" id="compare-set-a">
+                        <h3 class="compare-label">Set A</h3>
+                        <div class="chart-wrapper"><canvas id="chart-corr-a" width="600" height="350"></canvas></div>
+                        <div class="chart-wrapper"><canvas id="chart-spread-a" width="600" height="250"></canvas></div>
+                    </div>
+                    <div class="compare-col" id="compare-set-b">
+                        <h3 class="compare-label">Set B</h3>
+                        <div class="chart-wrapper"><canvas id="chart-corr-b" width="600" height="350"></canvas></div>
+                        <div class="chart-wrapper"><canvas id="chart-spread-b" width="600" height="250"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Super Test View -->
+            <div id="view-super-test" class="view">
+                <div class="content-section">
+                    <h2 class="section-title">⚡ Super Test Results</h2>
+                    <div id="super-test-progress" class="hidden">
+                        <div class="progress-bar-container large">
+                            <div class="progress-bar" id="st-progress-bar"></div>
+                        </div>
+                        <p class="progress-text" id="st-progress-text">Processing intervals...</p>
+                    </div>
+                    <div id="super-test-summary" class="hidden"></div>
+                    <div class="table-container" id="super-test-table-container">
+                        <table id="super-test-table" class="data-table ranking-table">
+                            <thead id="st-table-head"></thead>
+                            <tbody id="st-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Settings</h2>
+                <button class="modal-close" id="settings-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <h3>MT5 Connection</h3>
+                    <p class="setting-status" id="mt5-status">Checking...</p>
+                </div>
+                <div class="setting-group">
+                    <h3>Binance Connection</h3>
+                    <p class="setting-status" id="binance-status">Checking...</p>
+                </div>
+                <div class="setting-group">
+                    <h3>Cache</h3>
+                    <p class="setting-status" id="cache-status">Checking...</p>
+                    <button class="btn btn-sm btn-danger" id="btn-clear-cache">Clear Cache</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/js/utils/format.js?v=3"></script>
+    <script src="/js/utils/datetime.js?v=3"></script>
+    <script src="/js/api.js?v=3"></script>
+    <script src="/js/ws.js?v=3"></script>
+    <script src="/js/state.js?v=3"></script>
+    <script src="/js/components/charts.js?v=3"></script>
+    <script src="/js/components/tables.js?v=3"></script>
+    <script src="/js/components/sidebar.js?v=3"></script>
+    <script src="/js/components/supertest.js?v=3"></script>
+    <script src="/js/components/progress.js?v=3"></script>
+    <script src="/js/components/modal.js?v=3"></script>
+    <script src="/js/app.js?v=3"></script>
+</body>
+
+</html>
