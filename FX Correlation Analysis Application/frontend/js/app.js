@@ -204,6 +204,14 @@ const App = {
             return;
         }
 
+        // Store context so row detail modal knows what to query
+        AppState.superTestContext = {
+            domain: cfg.domain,
+            sym1: cfg.symbol1,
+            sym2: cfg.symbol2,
+            timeframe: cfg.timeframe,
+        };
+
         AppState.setView('super-test');
         SuperTestUI.showProgress(true);
         SuperTestUI.updateProgress(0, 1);
@@ -215,7 +223,7 @@ const App = {
             stCfg.endTime, stCfg.intervalMinutes,
         );
 
-        Toast.show(`Super Test started: ${job.total_intervals} intervals`, 'info');
+        Toast.show(`Super Test started: ${job.total_intervals} windows`, 'info');
 
         // Poll for results via WebSocket
         WS.connect(job.job_id,
@@ -234,7 +242,6 @@ const App = {
                 }
             },
             () => {
-                // On WebSocket close, try to get result
                 setTimeout(() => this._loadSuperTestResult(job.job_id), 500);
             }
         );

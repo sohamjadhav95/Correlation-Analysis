@@ -1,16 +1,24 @@
 """
-Super Test Engine — Comparative Interval Analysis.
+Super Test Engine — Rolling-Start Interval Analysis.
 
-Divides a time range into discrete equal intervals and runs
-the correlation analysis independently for each interval.
-Results are aggregated into a comparative ranking table.
+Each "window" shares the same fixed end time but has a progressively
+later start time, shifted by interval_minutes each step.
+
+Example: start=00:00, end=08:00, interval=5min generates:
+  Window 1:  00:00 → 08:00  (full 8 hours)
+  Window 2:  00:05 → 08:00
+  Window 3:  00:10 → 08:00
+  ...
+  Window 96: 07:55 → 08:00  (5 minutes only)
+
+This reveals which START TIME produces the most stable correlation
+over the rest of the session — a "best entry time" ranking.
 
 Design:
-- Uses ProcessPoolExecutor for true CPU parallelism (bypasses GIL).
-- Each interval gets its own data slice — no shared mutable state.
-- Interval boundaries are half-open [start, end) to prevent overlap.
-- Index base resets to 1000 per interval — no look-ahead bias.
-- Progress is tracked per-interval and can be streamed via WebSocket.
+- Rolling start windows, fixed end time.
+- Each window independently resets index to 1000 (no look-ahead bias).
+- ProcessPoolExecutor for CPU parallelism.
+- Progress streamed via WebSocket callback.
 """
 
 import logging
@@ -30,7 +38,7 @@ from ..config import AppConfig
 logger = logging.getLogger(__name__)
 
 
-# ── Interval Slicer ──────────────────────────────────────────────
+# ── Interval Generator ───────────────────────────────────────────
 
 def generate_intervals(
     date: str,
@@ -39,135 +47,116 @@ def generate_intervals(
     interval_minutes: int,
 ) -> list[tuple[datetime, datetime]]:
     """
-    Generate discrete time intervals for Super Test.
+    Generate rolling-start windows for Super Test.
+
+    Each window starts interval_minutes later than the previous,
+    but ALL windows share the same fixed end time.
 
     Args:
         date: "YYYY-MM-DD"
-        start_time: "HH:MM" (UTC)
-        end_time: "HH:MM" (UTC)
-        interval_minutes: width of each interval in minutes
+        start_time: "HH:MM" (UTC) — earliest possible start
+        end_time: "HH:MM" (UTC) — fixed end for every window
+        interval_minutes: how many minutes to shift the start each step
 
     Returns:
-        List of (start, end) UTC datetime tuples, half-open intervals [start, end)
+        List of (window_start, fixed_end) UTC datetime tuples.
+        The last window has at least interval_minutes of data.
     """
-    start = datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-    end = datetime.strptime(f"{date} {end_time}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+    fixed_start = datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+    fixed_end   = datetime.strptime(f"{date} {end_time}",   "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
 
-    # Handle overnight ranges (e.g., 22:00 → 06:00)
-    if end <= start:
-        end += timedelta(days=1)
+    # Handle overnight ranges (e.g. 22:00 → 06:00)
+    if fixed_end <= fixed_start:
+        fixed_end += timedelta(days=1)
 
     delta = timedelta(minutes=interval_minutes)
     intervals = []
-    current = start
+    current_start = fixed_start
 
-    while current + delta <= end:
-        intervals.append((current, current + delta))
-        current += delta
+    # Generate until we'd have less than one interval of data left
+    while current_start + delta <= fixed_end:
+        intervals.append((current_start, fixed_end))
+        current_start += delta
 
     return intervals
 
 
-# ── Single Interval Worker ────────────────────────────────────────
+# ── Single Window Worker ─────────────────────────────────────────
 
 def _run_single_interval(args: tuple) -> dict:
     """
-    Process a single interval — designed to run in a worker process.
+    Process a single rolling window — runs in a worker process.
 
-    Args (as tuple for ProcessPool compatibility):
-        (interval_start, interval_end, df1_slice_values, df2_slice_values,
-         df1_slice_timestamps, df2_slice_timestamps, timeframe, sym1, sym2)
+    Args (tuple):
+        (window_start, fixed_end, df1_timestamps, df1_mid,
+         df2_timestamps, df2_mid, timeframe, sym1, sym2, window_index)
 
     Returns:
-        dict with interval metrics or error info.
+        dict with window metrics or error info.
     """
     (
-        interval_start, interval_end,
+        window_start, fixed_end,
         df1_timestamps, df1_mid,
         df2_timestamps, df2_mid,
         timeframe, sym1, sym2,
+        window_index,
     ) = args
 
+    def _empty(status, error=None):
+        r = {
+            "window_index":    window_index,
+            "interval_start":  window_start.isoformat(),
+            "interval_end":    fixed_end.isoformat(),
+            "window_minutes":  int((fixed_end - window_start).total_seconds() / 60),
+            "status":          status,
+            "total_bars":      0,
+            "total_flips":     0,
+            "total_flip_loss": 0.0,
+            "max_spread":      0.0,
+            "avg_spread":      0.0,
+            "max_single_flip_loss": 0.0,
+        }
+        if error:
+            r["error"] = error
+        return r
+
     try:
-        # Reconstruct lightweight DataFrames from numpy arrays
         df1 = pd.DataFrame({
             "timestamp": pd.to_datetime(df1_timestamps, utc=True),
-            "mid": df1_mid.astype(np.float64),
+            "mid":       df1_mid.astype(np.float64),
         })
         df2 = pd.DataFrame({
             "timestamp": pd.to_datetime(df2_timestamps, utc=True),
-            "mid": df2_mid.astype(np.float64),
+            "mid":       df2_mid.astype(np.float64),
         })
 
         if df1.empty or df2.empty:
-            return {
-                "interval_start": interval_start.isoformat(),
-                "interval_end": interval_end.isoformat(),
-                "status": "no_data",
-                "total_bars": 0,
-                "total_flips": 0,
-                "total_flip_loss": 0.0,
-                "max_spread": 0.0,
-                "avg_spread": 0.0,
-                "max_single_flip_loss": 0.0,
-            }
+            return _empty("no_data")
 
-        # Resample
         ohlc1 = resample_ticks_to_ohlc(df1, timeframe)
         ohlc2 = resample_ticks_to_ohlc(df2, timeframe)
 
         if ohlc1.empty or ohlc2.empty:
-            return {
-                "interval_start": interval_start.isoformat(),
-                "interval_end": interval_end.isoformat(),
-                "status": "insufficient_bars",
-                "total_bars": 0,
-                "total_flips": 0,
-                "total_flip_loss": 0.0,
-                "max_spread": 0.0,
-                "avg_spread": 0.0,
-                "max_single_flip_loss": 0.0,
-            }
+            return _empty("insufficient_bars")
 
-        # Correlate
         result = compute_correlation(ohlc1, ohlc2, sym1, sym2)
 
         if result.empty:
-            return {
-                "interval_start": interval_start.isoformat(),
-                "interval_end": interval_end.isoformat(),
-                "status": "no_overlap",
-                "total_bars": 0,
-                "total_flips": 0,
-                "total_flip_loss": 0.0,
-                "max_spread": 0.0,
-                "avg_spread": 0.0,
-                "max_single_flip_loss": 0.0,
-            }
+            return _empty("no_overlap")
 
-        # Metrics
         metrics = compute_raw_metrics(result)
 
         return {
-            "interval_start": interval_start.isoformat(),
-            "interval_end": interval_end.isoformat(),
-            "status": "success",
+            "window_index":    window_index,
+            "interval_start":  window_start.isoformat(),
+            "interval_end":    fixed_end.isoformat(),
+            "window_minutes":  int((fixed_end - window_start).total_seconds() / 60),
+            "status":          "success",
             **metrics,
         }
 
     except Exception as e:
-        return {
-            "interval_start": interval_start.isoformat(),
-            "interval_end": interval_end.isoformat(),
-            "status": "error",
-            "error": str(e),
-            "total_bars": 0,
-            "total_flips": 0,
-            "total_flip_loss": 0.0,
-            "max_spread": 0.0,
-            "avg_spread": 0.0,
-            "max_single_flip_loss": 0.0,
-        }
+        return _empty("error", str(e))
 
 
 # ── Super Test Executor ──────────────────────────────────────────
@@ -185,21 +174,13 @@ def run_super_test(
     on_interval_complete: Optional[callable] = None,
 ) -> dict:
     """
-    Run the Super Test: divide time range into intervals, analyze each, rank results.
-
-    Args:
-        df1_ticks: Full tick DataFrame for asset 1 [timestamp, bid, ask, mid]
-        df2_ticks: Full tick DataFrame for asset 2
-        sym1, sym2: Symbol names
-        timeframe: Resample rule (e.g. '10s', '1min')
-        date: "YYYY-MM-DD"
-        start_time: "HH:MM" UTC
-        end_time: "HH:MM" UTC
-        interval_minutes: Minutes per interval
-        on_interval_complete: callback(completed, total, interval_result)
+    Run the Super Test: rolling-start windows, all sharing the same end time.
 
     Returns:
-        dict with intervals list and rankings
+        dict with:
+          - intervals: all window results (ordered by start time)
+          - rankings:  sorted by composite stability score (best first)
+          - summary:   aggregate stats (best_start, worst_start, etc.)
     """
     t0 = time.time()
 
@@ -209,137 +190,179 @@ def run_super_test(
     if total == 0:
         return {
             "status": "error",
-            "message": "No intervals generated. Check time range and interval size.",
+            "message": "No windows generated. Check time range and interval size.",
             "total_intervals": 0,
             "completed_intervals": 0,
             "intervals": [],
             "rankings": [],
+            "summary": {},
         }
 
-    logger.info(f"Super Test: {total} intervals of {interval_minutes}min each")
+    logger.info(f"Super Test: {total} rolling windows of {interval_minutes}min step, ending {end_time}")
 
-    # Ensure timestamp is the correct type for slicing
-    if "timestamp" in df1_ticks.columns:
-        df1 = df1_ticks.set_index("timestamp").sort_index()
-    else:
-        df1 = df1_ticks.sort_index()
+    # Index tick data for fast slicing
+    def _prep(df):
+        if "timestamp" in df.columns:
+            return df.set_index("timestamp").sort_index()
+        return df.sort_index()
 
-    if "timestamp" in df2_ticks.columns:
-        df2 = df2_ticks.set_index("timestamp").sort_index()
-    else:
-        df2 = df2_ticks.sort_index()
+    df1 = _prep(df1_ticks)
+    df2 = _prep(df2_ticks)
 
-    # Pre-slice data for each interval and serialize as numpy arrays
+    # Build task list — slice data per window
     tasks = []
-    for iv_start, iv_end in intervals:
-        s1 = df1.loc[iv_start:iv_end - timedelta(microseconds=1)]  # half-open [start, end)
-        s2 = df2.loc[iv_start:iv_end - timedelta(microseconds=1)]
+    for idx, (win_start, win_end) in enumerate(intervals):
+        s1 = df1.loc[win_start:win_end]
+        s2 = df2.loc[win_start:win_end]
 
         tasks.append((
-            iv_start, iv_end,
+            win_start, win_end,
             s1.index.values if not s1.empty else np.array([], dtype="datetime64[ns]"),
             s1["mid"].values if not s1.empty else np.array([], dtype=np.float64),
             s2.index.values if not s2.empty else np.array([], dtype="datetime64[ns]"),
             s2["mid"].values if not s2.empty else np.array([], dtype=np.float64),
             timeframe, sym1, sym2,
+            idx,  # window_index for ordering
         ))
 
-    # Execute in parallel
-    results = []
+    # Execute
+    results_map: dict[int, dict] = {}
     max_workers = min(AppConfig.super_test_max_workers, total)
 
-    # For small counts, run serially to avoid process spawn overhead
     if total <= 4:
-        for i, task in enumerate(tasks):
-            result = _run_single_interval(task)
-            results.append(result)
+        for task in tasks:
+            r = _run_single_interval(task)
+            results_map[r["window_index"]] = r
             if on_interval_complete:
-                on_interval_complete(i + 1, total, result)
+                on_interval_complete(len(results_map), total, r)
     else:
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            future_to_idx = {
-                executor.submit(_run_single_interval, task): i
-                for i, task in enumerate(tasks)
+            future_map = {
+                executor.submit(_run_single_interval, task): task[-1]
+                for task in tasks
             }
-
-            for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
+            for future in as_completed(future_map):
                 try:
-                    result = future.result()
+                    r = future.result()
                 except Exception as e:
-                    result = {
-                        "interval_start": intervals[idx][0].isoformat(),
-                        "interval_end": intervals[idx][1].isoformat(),
-                        "status": "error",
-                        "error": str(e),
-                        "total_bars": 0,
-                        "total_flips": 0,
+                    idx = future_map[future]
+                    win_start, win_end = intervals[idx]
+                    r = {
+                        "window_index":    idx,
+                        "interval_start":  win_start.isoformat(),
+                        "interval_end":    win_end.isoformat(),
+                        "window_minutes":  int((win_end - win_start).total_seconds() / 60),
+                        "status":          "error",
+                        "error":           str(e),
+                        "total_bars":      0,
+                        "total_flips":     0,
                         "total_flip_loss": 0.0,
-                        "max_spread": 0.0,
-                        "avg_spread": 0.0,
+                        "max_spread":      0.0,
+                        "avg_spread":      0.0,
                         "max_single_flip_loss": 0.0,
                     }
-                results.append((idx, result))
+                results_map[r["window_index"]] = r
                 if on_interval_complete:
-                    on_interval_complete(len(results), total, result)
+                    on_interval_complete(len(results_map), total, r)
 
-        # Sort by original interval order
-        results.sort(key=lambda x: x[0])
-        results = [r for _, r in results]
+    # Re-order by original window index (chronological start time)
+    results = [results_map[i] for i in range(total)]
 
-    # Generate rankings
+    # Compute rankings and summary
     rankings = _compute_rankings(results)
+    summary  = _compute_summary(results, rankings, start_time, end_time, interval_minutes)
 
     elapsed = time.time() - t0
-    logger.info(f"Super Test complete: {total} intervals in {elapsed:.1f}s")
+    logger.info(f"Super Test complete: {total} windows in {elapsed:.1f}s")
 
     return {
-        "status": "success",
-        "total_intervals": total,
-        "completed_intervals": len([r for r in results if r.get("status") == "success"]),
-        "elapsed_seconds": round(elapsed, 2),
-        "intervals": results,
-        "rankings": rankings,
+        "status":               "success",
+        "total_intervals":      total,
+        "completed_intervals":  len([r for r in results if r.get("status") == "success"]),
+        "elapsed_seconds":      round(elapsed, 2),
+        "intervals":            results,
+        "rankings":             rankings,
+        "summary":              summary,
     }
 
 
 def _compute_rankings(results: list[dict]) -> list[dict]:
     """
-    Rank intervals by composite score.
+    Rank windows by composite stability score.
 
-    Scoring:
-    - Lower total_flip_loss is better (stability)
-    - Lower total_flips is better (fewer reversals)
-    - Higher total_bars is better (more data)
+    Scoring (lower = more stable = better):
+      - flip_rate     = total_flips / total_bars       (weight: 40)
+      - loss_per_bar  = total_flip_loss / total_bars   (weight: 40)
+      - avg_spread    = avg |spread| per bar            (weight: 20)
 
-    Returns list of interval results with added 'rank' and 'score' fields.
+    Returns list sorted best → worst, with rank + score fields.
     """
-    # Filter to successful intervals only
     scored = []
     for r in results:
         if r.get("status") != "success" or r.get("total_bars", 0) == 0:
             continue
 
-        # Composite score: lower is better
-        # Normalize by bars to make intervals comparable
-        bars = max(r["total_bars"], 1)
-        flip_rate = r["total_flips"] / bars
-        loss_per_bar = r["total_flip_loss"] / bars
+        bars       = max(r["total_bars"], 1)
+        flip_rate  = r["total_flips"]     / bars
+        loss_pb    = r["total_flip_loss"] / bars
+        avg_sp     = r.get("avg_spread", 0)
 
-        score = round(flip_rate * 50 + loss_per_bar * 50, 6)
+        # Composite (all normalized, lower is better)
+        score = round(flip_rate * 40 + loss_pb * 40 + avg_sp * 20, 6)
+
+        # Start-time label for display (e.g. "00:05")
+        start_label = r["interval_start"][11:16]  # "HH:MM" from ISO
 
         scored.append({
             **r,
-            "score": score,
-            "flip_rate": round(flip_rate, 6),
-            "loss_per_bar": round(loss_per_bar, 6),
+            "start_time_label":  start_label,
+            "score":             score,
+            "flip_rate":         round(flip_rate, 6),
+            "loss_per_bar":      round(loss_pb,   6),
         })
 
-    # Sort by score ascending (lower = more stable)
     scored.sort(key=lambda x: x["score"])
 
-    # Assign ranks
     for i, item in enumerate(scored):
         item["rank"] = i + 1
 
     return scored
+
+
+def _compute_summary(
+    results: list[dict],
+    rankings: list[dict],
+    start_time: str,
+    end_time: str,
+    interval_minutes: int,
+) -> dict:
+    """Aggregate statistics across all windows for the header summary card."""
+    successful = [r for r in results if r.get("status") == "success"]
+    if not successful:
+        return {}
+
+    flip_losses = [r["total_flip_loss"] for r in successful]
+    flip_counts = [r["total_flips"]     for r in successful]
+    avg_spreads = [r.get("avg_spread", 0) for r in successful]
+
+    best  = rankings[0]  if rankings else None
+    worst = rankings[-1] if rankings else None
+
+    return {
+        "total_windows":     len(results),
+        "successful":        len(successful),
+        "range_start":       start_time,
+        "range_end":         end_time,
+        "step_minutes":      interval_minutes,
+        "avg_flip_loss":     round(float(np.mean(flip_losses)), 4),
+        "min_flip_loss":     round(float(np.min(flip_losses)),  4),
+        "max_flip_loss":     round(float(np.max(flip_losses)),  4),
+        "avg_flips":         round(float(np.mean(flip_counts)), 2),
+        "avg_spread":        round(float(np.mean(avg_spreads)), 4),
+        "best_start_time":   best["interval_start"][11:16]  if best  else "—",
+        "best_score":        best["score"]                   if best  else 0,
+        "best_flip_loss":    best["total_flip_loss"]         if best  else 0,
+        "best_flips":        best["total_flips"]             if best  else 0,
+        "worst_start_time":  worst["interval_start"][11:16] if worst else "—",
+        "worst_score":       worst["score"]                  if worst else 0,
+    }

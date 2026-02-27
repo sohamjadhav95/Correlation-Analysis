@@ -3,6 +3,64 @@
 const Tables = {
     PAGE_SIZE: 100,
 
+    /* ── Universal Sort Enabler ───────────────────────── */
+    /**
+     * Attach click-to-sort on every <th> in any <table>.
+     * Works on static innerHTML tables (supertest, metrics, compare).
+     * Sorts the <tbody> rows in-place; toggles ASC ↔ DESC.
+     */
+    sortTable(tableEl) {
+        if (!tableEl) return;
+        const thead = tableEl.querySelector('thead');
+        const tbody = tableEl.querySelector('tbody');
+        if (!thead || !tbody) return;
+
+        thead.querySelectorAll('th').forEach((th, colIdx) => {
+            // Already wired up — skip
+            if (th.dataset.sortable) return;
+            th.dataset.sortable = '1';
+            th.style.cursor = 'pointer';
+            th.title = 'Click to sort';
+            let asc = true;
+
+            th.addEventListener('click', () => {
+                // Clear other headers
+                thead.querySelectorAll('th').forEach(t => {
+                    if (t !== th) {
+                        t.classList.remove('sorted-asc', 'sorted-desc');
+                        delete t.dataset.sortDir;
+                    }
+                });
+
+                // Toggle direction
+                if (th.dataset.sortDir === 'asc') {
+                    asc = false;
+                    th.dataset.sortDir = 'desc';
+                    th.classList.replace('sorted-asc', 'sorted-desc');
+                } else {
+                    asc = true;
+                    th.dataset.sortDir = 'asc';
+                    th.classList.remove('sorted-desc');
+                    th.classList.add('sorted-asc');
+                }
+
+                // Sort rows
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                rows.sort((a, b) => {
+                    const ta = a.cells[colIdx]?.textContent.trim() ?? '';
+                    const tb = b.cells[colIdx]?.textContent.trim() ?? '';
+                    const na = parseFloat(ta.replace(/[^0-9.\-]/g, ''));
+                    const nb = parseFloat(tb.replace(/[^0-9.\-]/g, ''));
+                    const numericBoth = !isNaN(na) && !isNaN(nb);
+                    const cmp = numericBoth ? na - nb : ta.localeCompare(tb);
+                    return asc ? cmp : -cmp;
+                });
+
+                rows.forEach(r => tbody.appendChild(r)); // re-insert in order
+            });
+        });
+    },
+
     /* ── Render Metrics Table ─────────────────────────── */
     renderMetrics(containerId, metrics, label = '') {
         const container = document.getElementById(containerId);
@@ -18,6 +76,8 @@ const Tables = {
                 <thead><tr><th>Metric</th><th>${label || 'Value'}</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
+
+        this.sortTable(container.querySelector('table'));
     },
 
     /* ── Render Comparison Metrics ────────────────────── */
@@ -39,6 +99,8 @@ const Tables = {
                 <thead><tr><th>Metric</th><th>${label1}</th><th>${label2}</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
+
+        this.sortTable(container.querySelector('table'));
     },
 
     /* ── Render Data Table (with pagination & sorting) ── */
@@ -150,57 +212,5 @@ const Tables = {
         } else {
             pagEl.innerHTML = `<span class="page-info">${filtered.length} rows</span>`;
         }
-    },
-
-    /* ── Super Test Ranking Table ─────────────────────── */
-    renderRankingTable(rankings) {
-        const headEl = document.getElementById('st-table-head');
-        const bodyEl = document.getElementById('st-table-body');
-
-        if (!rankings || rankings.length === 0) {
-            headEl.innerHTML = '';
-            bodyEl.innerHTML = '<tr><td colspan="100" style="text-align:center;color:var(--text-muted);padding:40px;">No results</td></tr>';
-            return;
-        }
-
-        headEl.innerHTML = `<tr>
-            <th>Rank</th>
-            <th>Interval</th>
-            <th>Bars</th>
-            <th>Flips</th>
-            <th>Total Flip Loss</th>
-            <th>Max |Spread|</th>
-            <th>Avg |Spread|</th>
-            <th>Flip Rate</th>
-            <th>Score</th>
-        </tr>`;
-
-        const maxScore = Math.max(...rankings.map(r => r.score || 0), 0.001);
-
-        let bodyHtml = '';
-        for (const r of rankings) {
-            const rankClass = r.rank <= 3 ? `rank-${r.rank}` : '';
-            const badgeClass = r.rank === 1 ? 'gold' : r.rank === 2 ? 'silver' : r.rank === 3 ? 'bronze' : 'normal';
-
-            // Heatmap class based on score
-            const scoreRatio = (r.score || 0) / maxScore;
-            const heatClass = scoreRatio < 0.33 ? 'heat-cool' : scoreRatio < 0.66 ? 'heat-warm' : 'heat-hot';
-
-            const start = r.interval_start ? r.interval_start.slice(11, 16) : '';
-            const end = r.interval_end ? r.interval_end.slice(11, 16) : '';
-
-            bodyHtml += `<tr class="${rankClass}">
-                <td><span class="rank-badge ${badgeClass}">${r.rank}</span></td>
-                <td>${start} – ${end}</td>
-                <td>${Format.integer(r.total_bars)}</td>
-                <td>${Format.integer(r.total_flips)}</td>
-                <td>${Format.number(r.total_flip_loss)}</td>
-                <td>${Format.number(r.max_spread)}</td>
-                <td>${Format.number(r.avg_spread)}</td>
-                <td>${Format.number(r.flip_rate, 6)}</td>
-                <td class="${heatClass}">${Format.number(r.score, 6)}</td>
-            </tr>`;
-        }
-        bodyEl.innerHTML = bodyHtml;
     },
 };
