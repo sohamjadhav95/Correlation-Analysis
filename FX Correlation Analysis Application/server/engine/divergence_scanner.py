@@ -114,6 +114,7 @@ def run_sliding_windows(
         w_spread_growth = []
         w_spread_slope = []
         w_scores = []
+        windows_data = []
 
         best_window_score = -float("inf")
         best_window_start_ts = None
@@ -155,6 +156,21 @@ def run_sliding_windows(
                 w_avg_spread.append(avg_spread)
                 w_spread_growth.append(spread_growth)
                 w_spread_slope.append(spread_slope)
+
+                windows_data.append({
+                    "window_index":   start_idx,
+                    "window_start":   str(common[start_idx]),
+                    "window_end":     str(common[end_idx - 1]),
+                    "total_bars":     window_bars,
+                    "total_flips":    m["total_flips"],
+                    "total_flip_loss": round(m["total_flip_loss"], 4),
+                    "max_spread":     round(m["max_spread"], 4),
+                    "avg_spread":     round(m["avg_spread"], 4),
+                    "max_single_flip_loss": round(m["max_single_flip_loss"], 4),
+                    "spread_growth":  round(spread_growth, 4),
+                    "spread_slope":   round(spread_slope, 6),
+                    "window_score":   round(w_score, 6),
+                })
 
             except Exception as e:
                 logger.debug(f"{pair_label} window {start_idx} error: {e}")
@@ -202,6 +218,7 @@ def run_sliding_windows(
             "best_window_start": best_window_start_ts,
             "avg_window_score": round(avg_window_score, 6),
             "score": round(score, 6),
+            "windows_data": windows_data,
         }
 
     except Exception as e:

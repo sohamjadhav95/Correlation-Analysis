@@ -160,6 +160,7 @@ const DivergenceUI = {
         } else {
             this._renderMetricsTable(body, pair);
             this._renderRobustnessNote(body, pair);
+            this._renderAllWindowsTable(body, pair);
         }
 
         modal.classList.remove('hidden');
@@ -204,7 +205,78 @@ const DivergenceUI = {
         container.appendChild(metricsDiv);
     },
 
-    /* ── Panel 3: Robustness Note ────────────────────────── */
+    /* ── Panel 3: All Windows Table ──────────────────────── */
+    _renderAllWindowsTable(container, pair) {
+        const windows = pair.windows_data;
+        if (!windows || windows.length === 0) return;
+
+        const medalFor = (rank) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+
+        // Find best window index for highlighting
+        const bestScore = Math.max(...windows.map(w => w.window_score));
+
+        const rows = windows.map(w => {
+            const isBest = w.window_score === bestScore;
+            const flipClass = w.total_flips === 0 ? 'st-cell-green' : w.total_flips <= 3 ? 'st-cell-yellow' : 'st-cell-red';
+            const growthClass = w.spread_growth > 0 ? 'st-cell-green' : w.spread_growth < 0 ? 'st-cell-red' : '';
+
+            // Format timestamp to HH:MM:SS only for readability
+            const startLabel = w.window_start ? w.window_start.slice(11, 19) : '—';
+            const endLabel = w.window_end ? w.window_end.slice(11, 19) : '—';
+
+            return `
+                <tr class="${isBest ? 'st-best-row' : ''}">
+                    <td>${w.window_index + 1}</td>
+                    <td>${startLabel}</td>
+                    <td>${endLabel}</td>
+                    <td>${w.total_bars}</td>
+                    <td class="${flipClass}">${w.total_flips}</td>
+                    <td>${Format.number(w.total_flip_loss, 4)}</td>
+                    <td>${Format.number(w.avg_spread, 4)}</td>
+                    <td>${Format.number(w.max_spread, 4)}</td>
+                    <td>${Format.number(w.max_single_flip_loss, 4)}</td>
+                    <td class="${growthClass}">${Format.number(w.spread_growth, 4)}</td>
+                    <td>${Format.number(w.spread_slope, 6)}</td>
+                    <td>${Format.number(w.window_score, 6)}</td>
+                </tr>`;
+        }).join('');
+
+        const tableDiv = document.createElement('div');
+        tableDiv.style.marginTop = '32px';
+        tableDiv.innerHTML = `
+            <h3 class="section-title" style="margin-top:0">📋 All Windows — Chronological</h3>
+            <p class="st-table-note">
+                ${windows.length} windows tested · 
+                ${windows.filter(w => w.total_flips === 0).length} with zero crossings · 
+                Best window highlighted in gold
+            </p>
+            <div class="table-container" style="max-height:420px;overflow-y:auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Bars</th>
+                            <th>Flips</th>
+                            <th>Flip Loss</th>
+                            <th>Avg Spread</th>
+                            <th>Max Spread</th>
+                            <th>Max Single Loss</th>
+                            <th>Spread Growth</th>
+                            <th>Slope</th>
+                            <th>Window Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+
+        container.appendChild(tableDiv);
+        Tables.sortTable(tableDiv.querySelector('table'));
+    },
+
+    /* ── Panel 4: Robustness Note ────────────────────────── */
     _renderRobustnessNote(container, pair) {
         const best = pair.best_window_score || 0;
         const avg = pair.avg_window_score || 0;

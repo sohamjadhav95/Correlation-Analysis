@@ -858,3 +858,13 @@
     font-size: var(--font-xs);
     color: var(--text-muted);
 }
+
+/* Divergence Scanner — best window highlight */
+.st-best-row td {
+    background-color: rgba(234, 179, 8, 0.08);
+    font-weight: 600;
+}
+.st-best-row td:first-child::before {
+    content: '★ ';
+    color: #eab308;
+}
