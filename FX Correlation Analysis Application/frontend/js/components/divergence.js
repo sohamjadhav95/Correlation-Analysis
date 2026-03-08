@@ -147,6 +147,13 @@ const DivergenceUI = {
             (r.sym1 === sym2 && r.sym2 === sym1)
         );
 
+        // Store current pair context for window drill-down
+        AppState.divergenceScanContext = {
+            ...(AppState.divergenceScanContext || {}),
+            sym1,
+            sym2,
+        };
+
         const modal = document.getElementById('div-detail-modal');
         document.getElementById('div-detail-title').textContent = `📊 Full Metrics — ${pairLabel}`;
         document.getElementById('div-detail-subtitle').textContent =
@@ -165,12 +172,24 @@ const DivergenceUI = {
 
         modal.classList.remove('hidden');
 
-        const close = () => modal.classList.add('hidden');
+        // Bind close
+        const close = () => {
+            modal.classList.add('hidden');
+            document.removeEventListener('keydown', esc);
+        };
         document.getElementById('div-detail-close').onclick = close;
         document.getElementById('div-detail-backdrop').onclick = close;
-        document.addEventListener('keydown', function esc(e) {
-            if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
-        });
+
+        function esc(e) {
+            // Only trigger if this modal is the top-most visible logic OR just hide the window and consume it
+            // Actually, we should check if Window modal is NOT open, or just stop propagation.
+            const winModal = document.getElementById('div-window-modal');
+            if (e.key === 'Escape' && (!winModal || winModal.classList.contains('hidden'))) {
+                close();
+            }
+        }
+        // Remove any previous listener loosely laying around to be safe
+        document.addEventListener('keydown', esc);
     },
 
     /* ── Panel 2: Full Metrics Table ────────────────────── */
@@ -225,7 +244,10 @@ const DivergenceUI = {
             const endLabel = w.window_end ? w.window_end.slice(11, 19) : '—';
 
             return `
-                <tr class="${isBest ? 'st-best-row' : ''}">
+                <tr class="st-clickable-row ${isBest ? 'st-best-row' : ''}"
+                    data-wstart="${w.window_start || ''}"
+                    data-wend="${w.window_end || ''}"
+                    title="Click to view full analysis for this window">
                     <td>${w.window_index + 1}</td>
                     <td>${startLabel}</td>
                     <td>${endLabel}</td>
@@ -273,7 +295,17 @@ const DivergenceUI = {
             </div>`;
 
         container.appendChild(tableDiv);
-        Tables.sortTable(tableDiv.querySelector('table'));
+        const tableEl = tableDiv.querySelector('table');
+        Tables.sortTable(tableEl);
+
+        // Bind window row clicks (to the table element, since sortTable might rebuild rows)
+        tableEl.addEventListener('click', (e) => {
+            const row = e.target.closest('.st-clickable-row');
+            if (!row) return;
+            const wstart = row.dataset.wstart;
+            const wend = row.dataset.wend;
+            if (wstart && wend) this.openWindowDetail(wstart, wend);
+        });
     },
 
     /* ── Panel 4: Robustness Note ────────────────────────── */
@@ -313,5 +345,180 @@ const DivergenceUI = {
                 <span class="st-cell-red">&lt; 0.4</span> Fragile
             </div>`;
         container.appendChild(block);
+    },
+
+    /* ── Window Drill-Down ───────────────────────────────── */
+    openWindowDetail(windowStart, windowEnd) {
+        const scanCtx = AppState.divergenceScanContext;
+        if (!scanCtx) {
+            Toast.show('No scan context — please re-run the scan', 'error');
+            return;
+        }
+
+        const modal = document.getElementById('div-window-modal');
+        const loading = document.getElementById('div-window-loading');
+        const results = document.getElementById('div-window-results');
+
+        // Set header labels
+        const startLabel = windowStart.slice(11, 19);
+        const endLabel = windowEnd.slice(11, 19);
+        document.getElementById('div-window-title').textContent =
+            `Window Analysis: ${startLabel} → ${endLabel} UTC`;
+        document.getElementById('div-window-subtitle').textContent =
+            `${scanCtx.sym1} / ${scanCtx.sym2} · ${scanCtx.timeframe} · ${scanCtx.domain}`;
+
+        // Reset
+        loading.classList.remove('hidden');
+        results.classList.add('hidden');
+        document.getElementById('div-window-metrics').innerHTML = '';
+        document.getElementById('div-window-table-head').innerHTML = '';
+        document.getElementById('div-window-table-body').innerHTML = '';
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Bind close
+        const close = () => {
+            modal.classList.add('hidden');
+            document.removeEventListener('keydown', esc, true);
+        };
+        document.getElementById('div-window-close').onclick = close;
+        document.getElementById('div-window-backdrop').onclick = close;
+
+        function esc(e) {
+            if (e.key === 'Escape') {
+                e.stopImmediatePropagation();
+                close();
+            }
+        }
+        document.addEventListener('keydown', esc, true);
+
+        // Fetch and render
+        this._fetchAndRenderWindow(scanCtx, windowStart, windowEnd);
+    },
+
+    async _fetchAndRenderWindow(ctx, windowStart, windowEnd) {
+        const loading = document.getElementById('div-window-loading');
+        const results = document.getElementById('div-window-results');
+
+        try {
+            const result = await API.runAnalysis(
+                ctx.domain, ctx.sym1, ctx.sym2,
+                ctx.timeframe, windowStart, windowEnd
+            );
+
+            loading.classList.add('hidden');
+            results.classList.remove('hidden');
+
+            const data = result.data || [];
+            const sym1 = ctx.sym1;
+            const sym2 = ctx.sym2;
+
+            // Summary metrics table
+            Tables.renderMetrics('div-window-metrics', result.metrics, `${sym1} / ${sym2}`);
+
+            // Download button
+            document.getElementById('div-window-download').onclick = () => {
+                if (!data.length) return;
+                const cols = Object.keys(data[0]);
+                const rows = [cols.join(','), ...data.map(r => cols.map(c => r[c] ?? '').join(','))];
+                const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `window_${windowStart.slice(11, 19)}_${windowEnd.slice(11, 19)}_${sym1}_${sym2}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                Toast.show('CSV downloaded', 'success');
+            };
+
+            // Bar data table
+            this._renderWindowTable(data);
+
+            // Search on bar data table
+            const searchInput = document.getElementById('div-window-search');
+            if (searchInput) {
+                searchInput.oninput = () => {
+                    const q = searchInput.value.toLowerCase();
+                    document.querySelectorAll('#div-window-table tbody tr').forEach(row => {
+                        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+                    });
+                };
+            }
+
+            // All charts — after paint
+            requestAnimationFrame(() => {
+                try {
+                    // 1. Asset Index Correlation
+                    Charts.drawLineChart('div-window-chart-corr', data, {
+                        key1: `${sym1}_index`, key2: `${sym2}_index`,
+                        label1: sym1, label2: sym2,
+                        baseline: 1000, height: 260, yDecimals: 2,
+                    });
+
+                    // 2. Index Spread Over Time
+                    Charts.drawAreaChart('div-window-chart-spread', data, {
+                        key: 'index_spread', height: 260, yDecimals: 4,
+                    });
+
+                    // 3. Flip Loss Over Time (only bars where flip_occurred = true)
+                    const flipData = data.filter(d => d.flip_occurred);
+                    if (flipData.length > 0) {
+                        Charts.drawBarChart('div-window-chart-fliploss', flipData, {
+                            key: 'flip_loss', height: 220, yDecimals: 4,
+                        });
+                    }
+
+                    // 4. Spread Distribution histogram
+                    const spreadVals = data.map(d => d.index_spread).filter(v => v != null);
+                    if (spreadVals.length > 0) {
+                        Charts.drawHistogram('div-window-chart-hist', spreadVals, {
+                            bins: 40, height: 220,
+                        });
+                    }
+
+                    // 5. Position Breakdown donut
+                    const positions = {};
+                    data.forEach(d => {
+                        const p = d.current_position || 'Unknown';
+                        positions[p] = (positions[p] || 0) + 1;
+                    });
+                    const posLabels = Object.keys(positions);
+                    const posValues = posLabels.map(k => positions[k]);
+                    if (posLabels.length > 0) {
+                        Charts.drawDonutChart('div-window-chart-donut', posLabels, posValues, {
+                            height: 240,
+                        });
+                    }
+
+                } catch (chartErr) {
+                    console.warn('Window chart error:', chartErr);
+                }
+            });
+
+        } catch (err) {
+            loading.innerHTML = `
+                <p style="color:var(--accent-red)">❌ Analysis failed: ${err.message}</p>
+                <p style="color:var(--text-muted);font-size:.8rem;margin-top:8px">
+                    Make sure data is available for this date range.</p>`;
+        }
+    },
+
+    _renderWindowTable(data) {
+        if (!data || data.length === 0) return;
+        const cols = Object.keys(data[0]);
+        const head = document.getElementById('div-window-table-head');
+        const body = document.getElementById('div-window-table-body');
+        if (!head || !body) return;
+
+        head.innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+        body.innerHTML = data.slice(0, 1000).map(row =>
+            `<tr>${cols.map(c => {
+                const v = row[c];
+                return `<td>${typeof v === 'number' ? Format.number(v) : (v ?? '')}</td>`;
+            }).join('')}</tr>`
+        ).join('');
+
+        Tables.sortTable(document.getElementById('div-window-table'));
     },
 };

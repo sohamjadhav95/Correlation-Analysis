@@ -351,6 +351,13 @@
     overflow-y: auto;
 }
 
+.modal-xxl {
+    max-width: 1200px;
+    width: 96vw;
+    max-height: 92vh;
+    overflow-y: auto;
+}
+
 .modal-subtitle {
     font-size: var(--font-xs);
     color: var(--text-muted);
@@ -864,6 +871,7 @@
     background-color: rgba(234, 179, 8, 0.08);
     font-weight: 600;
 }
+
 .st-best-row td:first-child::before {
     content: '★ ';
     color: #eab308;
