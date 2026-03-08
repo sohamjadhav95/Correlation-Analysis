@@ -20,6 +20,7 @@ from .api.forex_routes import router as forex_router
 from .api.crypto_routes import router as crypto_router
 from .api.analysis_routes import router as analysis_router
 from .api.super_test_routes import router as super_test_router
+from .api.divergence_routes import router as divergence_router
 from .api.ws_routes import router as ws_router
 
 # Configure logging
@@ -51,6 +52,7 @@ app.include_router(forex_router)
 app.include_router(crypto_router)
 app.include_router(analysis_router)
 app.include_router(super_test_router)
+app.include_router(divergence_router)
 app.include_router(ws_router)
 
 

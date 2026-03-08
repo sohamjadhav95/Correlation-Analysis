@@ -109,6 +109,28 @@ class SuperTestResult(BaseModel):
     rankings: list[dict] = []
 
 
+
+# ── Divergence Scanner ────────────────────────────────────────────
+
+class DivergenceScanRequest(BaseModel):
+    """Request to start a Divergence Scan across multiple symbols."""
+    domain: Domain
+    symbols: list[str] = Field(..., min_length=2, max_length=10)
+    timeframe: Timeframe
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    start_time: str = Field(..., examples=["00:00"], description="HH:MM UTC")
+    end_time: str = Field(..., examples=["08:00"], description="HH:MM UTC")
+    window_bars: int = Field(200, ge=50, le=1000)
+
+
+class DivergenceScanJobResponse(BaseModel):
+    """Returned when a Divergence Scan job is submitted."""
+    job_id: str
+    total_pairs: int
+    estimated_time_seconds: float
+    ws_url: str
+
+
 # ── Configuration ─────────────────────────────────────────────────
 
 class ConfigResponse(BaseModel):

@@ -33,12 +33,16 @@
             <button class="tab-btn" data-domain="crypto" id="tab-crypto">
                 <span class="tab-icon">₿</span> Crypto Futures
             </button>
+            <button class="tab-btn" id="btn-divergence-tab">
+                <span class="tab-icon">🔍</span> Divergence Scanner
+            </button>
         </div>
         <div class="header-right">
             <div class="connection-status" id="connection-status">
                 <span class="status-dot"></span>
                 <span class="status-text">Ready</span>
             </div>
+            <button class="icon-btn" id="theme-btn" title="Toggle Theme">☀️</button>
             <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
         </div>
     </header>
@@ -328,6 +332,110 @@
         </main>
     </div>
 
+    <!-- ── Divergence Scanner (standalone overlay tab) ── -->
+    <div id="divergence-scanner-tab" class="div-scanner-tab hidden">
+        <div class="div-scanner-inner">
+
+            <!-- Controls Panel -->
+            <div class="panel div-controls-panel">
+                <h2 class="section-title" style="margin-top:0">🔍 Divergence Scanner</h2>
+                <p class="section-desc">Find which pair diverges the most — consistently across many windows, not just
+                    one starting point.</p>
+
+                <div class="div-form-grid">
+
+                    <!-- Symbol List -->
+                    <div class="div-form-col">
+                        <label class="div-label">Symbols (2–10)</label>
+                        <div id="div-symbol-list">
+                            <div class="div-symbol-row">
+                                <input type="text" class="input div-symbol-input" placeholder="e.g. EURUSDm" value="">
+                                <button class="btn btn-sm btn-secondary div-remove-btn"
+                                    onclick="DivergenceTab.removeSymbol(this)">−</button>
+                            </div>
+                            <div class="div-symbol-row">
+                                <input type="text" class="input div-symbol-input" placeholder="e.g. GBPUSDm" value="">
+                                <button class="btn btn-sm btn-secondary div-remove-btn"
+                                    onclick="DivergenceTab.removeSymbol(this)">−</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-secondary" id="div-add-symbol" onclick="DivergenceTab.addSymbol()"
+                            style="margin-top:8px;width:auto">
+                            + Add Symbol
+                        </button>
+                    </div>
+
+                    <!-- Time Settings -->
+                    <div class="div-form-col">
+                        <div class="input-group">
+                            <label for="div-timeframe">Timeframe</label>
+                            <select id="div-timeframe" class="input">
+                                <option value="10s">10 Seconds</option>
+                                <option value="30s">30 Seconds</option>
+                                <option value="1min" selected>1 Minute</option>
+                                <option value="5min">5 Minutes</option>
+                                <option value="15min">15 Minutes</option>
+                                <option value="30min">30 Minutes</option>
+                                <option value="1h">1 Hour</option>
+                                <option value="4h">4 Hours</option>
+                                <option value="1D">1 Day</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="div-date">Scan Date</label>
+                            <input type="date" id="div-date" class="input">
+                        </div>
+                        <div class="input-group">
+                            <label for="div-start-time">Start Time (UTC)</label>
+                            <input type="time" id="div-start-time" class="input" value="00:00">
+                        </div>
+                        <div class="input-group">
+                            <label for="div-end-time">End Time (UTC)</label>
+                            <input type="time" id="div-end-time" class="input" value="08:00">
+                        </div>
+                    </div>
+
+                    <!-- Scan Settings -->
+                    <div class="div-form-col">
+                        <div class="input-group">
+                            <label for="div-window-bars">Window Size (bars)</label>
+                            <input type="number" id="div-window-bars" class="input" value="200" min="50" max="1000">
+                        </div>
+
+                        <label class="div-label" style="margin-top:8px">Domain</label>
+                        <div class="div-domain-row">
+                            <label class="div-radio-label">
+                                <input type="radio" name="div-domain" value="forex" checked> Forex (MT5)
+                            </label>
+                            <label class="div-radio-label">
+                                <input type="radio" name="div-domain" value="crypto"> Crypto (Binance)
+                            </label>
+                        </div>
+
+                        <button class="btn btn-accent" id="div-run-btn" style="margin-top:16px"
+                            onclick="App._runDivergenceScan()">
+                            <span class="btn-icon">🔍</span> Run Scan
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="divergence-progress" class="hidden" style="margin-top:16px">
+                <div class="progress-bar-container large">
+                    <div class="progress-bar" id="div-progress-bar"></div>
+                </div>
+                <p class="progress-text" id="div-progress-text">Scanning pairs...</p>
+            </div>
+
+            <!-- Summary Card -->
+            <div id="divergence-summary" class="hidden" style="margin-top:20px"></div>
+
+            <!-- Rankings Table -->
+            <div id="divergence-ranking-container" class="content-section" style="margin-top:24px"></div>
+        </div>
+    </div>
+
     <!-- Super Test Window Detail Modal -->
     <div id="st-detail-modal" class="modal hidden">
         <div class="modal-backdrop" id="st-detail-backdrop"></div>
@@ -386,6 +494,21 @@
         </div>
     </div>
 
+    <!-- Divergence Scanner Pair Detail Modal -->
+    <div id="div-detail-modal" class="modal hidden">
+        <div class="modal-backdrop" id="div-detail-backdrop"></div>
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h2 id="div-detail-title">Pair Metrics</h2>
+                    <p id="div-detail-subtitle" class="modal-subtitle"></p>
+                </div>
+                <button class="modal-close" id="div-detail-close">&times;</button>
+            </div>
+            <div class="modal-body" id="div-detail-body"></div>
+        </div>
+    </div>
+
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -427,7 +550,43 @@
     <script src="/js/components/supertest.js?v=6"></script>
     <script src="/js/components/progress.js?v=6"></script>
     <script src="/js/components/modal.js?v=6"></script>
+    <script src="/js/components/divergence.js?v=1"></script>
     <script src="/js/app.js?v=6"></script>
+    <script>
+        // ── Divergence Tab Helper (inline — small enough to not warrant a separate file) ──
+        const DivergenceTab = {
+            _tabVisible: false,
+
+            toggle() {
+                this._tabVisible = !this._tabVisible;
+                document.getElementById('divergence-scanner-tab').classList.toggle('hidden', !this._tabVisible);
+                document.getElementById('btn-divergence-tab').classList.toggle('active', this._tabVisible);
+            },
+
+            addSymbol() {
+                const list = document.getElementById('div-symbol-list');
+                const count = list.querySelectorAll('.div-symbol-row').length;
+                if (count >= 10) { Toast.show('Maximum 10 symbols', 'info'); return; }
+                const row = document.createElement('div');
+                row.className = 'div-symbol-row';
+                row.innerHTML = `
+                    <input type="text" class="input div-symbol-input" placeholder="e.g. USDJPYm">
+                    <button class="btn btn-sm btn-secondary div-remove-btn" onclick="DivergenceTab.removeSymbol(this)">−</button>`;
+                list.appendChild(row);
+            },
+
+            removeSymbol(btn) {
+                const list = document.getElementById('div-symbol-list');
+                const rows = list.querySelectorAll('.div-symbol-row');
+                if (rows.length <= 2) { Toast.show('Keep at least 2 symbols', 'info'); return; }
+                btn.closest('.div-symbol-row').remove();
+            },
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('btn-divergence-tab').addEventListener('click', () => DivergenceTab.toggle());
+        });
+    </script>
 </body>
 
 </html>

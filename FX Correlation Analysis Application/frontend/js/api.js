@@ -72,6 +72,24 @@ const API = {
         return this._fetch('GET', `/api/super-test/result/${jobId}`);
     },
 
+    // ── Divergence Scanner ──
+    startDivergenceScan(domain, symbols, timeframe, date, startTime, endTime, windowBars) {
+        return this._fetch('POST', '/api/divergence/run', {
+            domain, symbols, timeframe, date,
+            start_time: startTime,
+            end_time: endTime,
+            window_bars: windowBars,
+        });
+    },
+
+    getDivergenceStatus(jobId) {
+        return this._fetch('GET', `/api/divergence/status/${jobId}`);
+    },
+
+    getDivergenceResult(jobId) {
+        return this._fetch('GET', `/api/divergence/result/${jobId}`);
+    },
+
     // ── Config ──
     getConfig() {
         return this._fetch('GET', '/api/config');

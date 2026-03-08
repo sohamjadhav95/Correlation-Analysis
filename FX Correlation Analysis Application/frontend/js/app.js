@@ -28,6 +28,22 @@ const App = {
         document.getElementById('btn-fetch').onclick = () => this.handleFetch();
         document.getElementById('btn-run').onclick = () => this.handleRun();
         document.getElementById('btn-download-csv').onclick = () => this.handleDownload();
+
+        const themeBtn = document.getElementById('theme-btn');
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = savedTheme;
+        themeBtn.textContent = savedTheme === 'light' ? '🌙' : '☀️';
+
+        themeBtn.onclick = () => {
+            const isLight = document.documentElement.dataset.theme === 'light';
+            const newTheme = isLight ? 'dark' : 'light';
+            document.documentElement.dataset.theme = newTheme;
+            localStorage.setItem('theme', newTheme);
+            themeBtn.textContent = newTheme === 'light' ? '🌙' : '☀️';
+
+            // Re-render currently showing charts if any
+            if (AppState.analysisResult) this._renderAnalysisCharts(AppState.analysisResult.data, Sidebar.getConfig().symbol1, Sidebar.getConfig().symbol2);
+        };
     },
 
     _bindViewSwitching() {
@@ -260,6 +276,94 @@ const App = {
             Toast.show(`Super Test complete: ${result.completed_intervals || 0} intervals`, 'success');
         } catch (e) {
             Toast.show('Failed to load results: ' + e.message, 'error');
+        }
+    },
+
+    async _runDivergenceScan() {
+        // Read form values from the divergence scanner tab
+        const getSymbols = () => {
+            const inputs = document.querySelectorAll('.div-symbol-input');
+            return Array.from(inputs)
+                .map(i => i.value.trim())
+                .filter(v => v.length > 0);
+        };
+
+        const symbols = getSymbols();
+        if (symbols.length < 2) {
+            Toast.show('Enter at least 2 symbols', 'error');
+            return;
+        }
+
+        const domain = document.querySelector('input[name="div-domain"]:checked')?.value || AppState.domain;
+        const tf = document.getElementById('div-timeframe')?.value || '1min';
+        const date = document.getElementById('div-date')?.value;
+        const startT = document.getElementById('div-start-time')?.value || '00:00';
+        const endT = document.getElementById('div-end-time')?.value || '08:00';
+        const winBars = parseInt(document.getElementById('div-window-bars')?.value || '200', 10);
+
+        if (!date) {
+            Toast.show('Please select a scan date', 'error');
+            return;
+        }
+
+        // Store context
+        AppState.divergenceScanContext = { domain, symbols, timeframe: tf, date, startT, endT, winBars };
+
+        // Show progress in the tab
+        DivergenceUI.showProgress(true);
+        DivergenceUI.updateProgress(0, 1);
+        document.getElementById('divergence-summary').classList.add('hidden');
+        document.getElementById('divergence-ranking-container').innerHTML = '';
+
+        try {
+            const job = await API.startDivergenceScan(
+                domain, symbols, tf, date, startT, endT, winBars
+            );
+            Toast.show(`Divergence Scan started: ${job.total_pairs} pairs`, 'info');
+
+            WS.connect(job.job_id,
+                (data) => {
+                    if (data.progress != null) {
+                        DivergenceUI.updateProgress(data.progress, data.total || job.total_pairs);
+                    }
+                    if (data.status === 'completed') {
+                        WS.disconnect();
+                        this._loadDivergenceResult(job.job_id);
+                    }
+                    if (data.status === 'failed') {
+                        WS.disconnect();
+                        Toast.show('Divergence Scan failed', 'error');
+                        DivergenceUI.showProgress(false);
+                    }
+                },
+                () => {
+                    setTimeout(() => this._loadDivergenceResult(job.job_id), 500);
+                }
+            );
+        } catch (e) {
+            DivergenceUI.showProgress(false);
+            Toast.show('Failed to start scan: ' + e.message, 'error');
+        }
+    },
+
+    async _loadDivergenceResult(jobId) {
+        try {
+            const result = await API.getDivergenceResult(jobId);
+            if (result.status === 'running') {
+                setTimeout(() => this._loadDivergenceResult(jobId), 1000);
+                return;
+            }
+            // Explicit error result from the background job
+            if (result.status === 'error') {
+                DivergenceUI.showProgress(false);
+                Toast.show(`Scan error: ${result.message || 'Unknown error'}`, 'error');
+                return;
+            }
+            AppState.divergenceScanResult = result;
+            DivergenceUI.renderResults(result);
+            Toast.show(`Scan complete: ${result.completed_pairs || 0} pairs`, 'success');
+        } catch (e) {
+            Toast.show('Failed to load scan results: ' + e.message, 'error');
         }
     },
 

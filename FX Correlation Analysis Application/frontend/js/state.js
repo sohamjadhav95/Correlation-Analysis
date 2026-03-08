@@ -10,6 +10,11 @@ const AppState = {
     analysisResult: null,
     compareResult: null,
     superTestResult: null,
+    divergenceScanResult: null,
+
+    // Context for detail modal drill-downs
+    superTestContext: null,
+    divergenceScanContext: null,
 
     // Listeners
     _listeners: {},
