@@ -876,3 +876,23 @@
     content: '★ ';
     color: #eab308;
 }
+
+/* Divergence Scanner — metrics sections */
+.div-metrics-section {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.div-metrics-section:last-child {
+    border-bottom: none;
+}
+
+.div-metrics-section-title {
+    font-size: .78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}

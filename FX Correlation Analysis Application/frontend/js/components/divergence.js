@@ -192,36 +192,126 @@ const DivergenceUI = {
         document.addEventListener('keydown', esc);
     },
 
-    /* ── Panel 2: Full Metrics Table ────────────────────── */
+    /* ── Panel 2: Full Metrics Table (Sectioned) ────────── */
     _renderMetricsTable(container, pair) {
-        const rows = [
+
+        // ── Helper: build a metrics section ──────────────────
+        const section = (title, rows) => `
+            <div class="div-metrics-section">
+                <div class="div-metrics-section-title">${title}</div>
+                <table class="metrics-table" style="width:100%">
+                    <tbody>
+                        ${rows.map(([label, value, cls]) => `
+                            <tr>
+                                <td class="metric-name" style="color:var(--text-secondary)">${label}</td>
+                                <td class="${cls || ''}" style="font-weight:700;color:var(--accent-blue);text-align:right">
+                                    ${value ?? '—'}
+                                </td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+
+        // ── Color helpers ─────────────────────────────────────
+        const ratioColor = (v) => v < 0.30 ? 'st-cell-green' : v < 0.60 ? 'st-cell-yellow' : v < 1.0 ? '' : 'st-cell-red';
+        const viabilityLabel = {
+            strong: '✅ Strong — flips cost <30% of avg spread',
+            moderate: '⚠️ Moderate — flips cost 30-60% of avg spread',
+            tight: '🟡 Tight — flips cost 60-100% of avg spread',
+            not_viable: '❌ Not viable — flips exceed avg spread',
+        }[pair.viability] || '—';
+        const viabilityCls = {
+            strong: 'st-cell-green', moderate: 'st-cell-yellow',
+            tight: '', not_viable: 'st-cell-red',
+        }[pair.viability] || '';
+
+        // ── Flip distribution bar (visual bucket display) ─────
+        const total = pair.windows_tested || 1;
+        const distBar = (count, label, cls) => {
+            const pct = Math.round(count / total * 100);
+            return `<tr>
+                <td style="color:var(--text-secondary);font-size:.82rem;padding:3px 0">${label}</td>
+                <td style="width:160px;padding:3px 8px">
+                    <div style="background:var(--bg-tertiary);border-radius:3px;height:10px;overflow:hidden">
+                        <div class="${cls}" style="width:${pct}%;height:100%;background:currentColor;opacity:.7"></div>
+                    </div>
+                </td>
+                <td style="font-size:.82rem;color:var(--text-muted);text-align:right">${count} (${pct}%)</td>
+            </tr>`;
+        };
+
+        const flipDistHTML = `
+            <div class="div-metrics-section">
+                <div class="div-metrics-section-title">📊 Flip Distribution Across Windows</div>
+                <table style="width:100%">
+                    <tbody>
+                        ${distBar(pair.flip_dist_zero, '0 flips (clean entry)', 'st-cell-green')}
+                        ${distBar(pair.flip_dist_low, '1–3 flips (manageable)', 'st-cell-yellow')}
+                        ${distBar(pair.flip_dist_mid, '4–7 flips (plan for this)', '')}
+                        ${distBar(pair.flip_dist_high, '8+ flips (stress test)', 'st-cell-red')}
+                    </tbody>
+                </table>
+                <p style="font-size:.78rem;color:var(--text-muted);margin-top:6px">
+                    Size your minimum position so
+                    <strong>${pair.max_flips_any_window}</strong> flips (worst window)
+                    at 1x is still an acceptable entry cost.
+                </p>
+            </div>`;
+
+        // ── Build all sections ────────────────────────────────
+        container.innerHTML = '';
+
+        // Section 1 — Window overview
+        container.innerHTML += section('📋 Window Overview', [
             ['Windows Tested', pair.windows_tested],
             ['Windows with 0 Crossings', pair.windows_zero_crossings],
             ['% Zero-Crossing Windows', Format.number(pair.pct_zero_crossing_windows, 2) + '%'],
-            ['Avg Spread Growth', Format.number(pair.avg_spread_growth, 6)],
+            ['Avg Spread Growth', Format.number(pair.avg_spread_growth, 4)],
             ['Avg Spread Slope', Format.number(pair.avg_spread_slope, 8)],
             ['Avg Max Spread', Format.number(pair.avg_max_spread, 4)],
             ['Avg Avg Spread', Format.number(pair.avg_avg_spread, 4)],
-            ['Avg Flips / Window', Format.number(pair.avg_flips, 3)],
-            ['Avg Flip Loss / Window', Format.number(pair.avg_flip_loss, 6)],
-            ['Best Window Score', Format.number(pair.best_window_score, 6)],
-            ['Best Window Start Time', pair.best_window_start || '—'],
             ['Divergence Score', Format.number(pair.score, 6)],
-        ].map(([k, v]) => `
-            <tr>
-                <td class="metric-name" style="color:var(--text-secondary)">${k}</td>
-                <td style="font-weight:700;color:var(--accent-blue)">${v ?? '—'}</td>
-            </tr>`).join('');
+        ]);
 
-        const metricsDiv = document.createElement('div');
-        metricsDiv.style.marginBottom = '24px';
-        metricsDiv.innerHTML = `
-            <table class="metrics-table" style="width:100%">
-                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
-        container.innerHTML = '';
-        container.appendChild(metricsDiv);
+        // Section 2 — Phase 1 / Phase 2 analysis
+        container.innerHTML += section('⚡ Phase Analysis (Entry Timing)', [
+            ['Avg Phase 1 Length',
+                `${Format.number(pair.avg_phase1_length, 1)} bars`,
+                ''],
+            ['Avg Phase 2 Length',
+                `${Format.number(pair.avg_phase2_length, 1)} bars`,
+                ''],
+            ['Avg Post-Flip Spread Growth',
+                Format.number(pair.avg_post_flip_growth, 4),
+                pair.avg_post_flip_growth > 0 ? 'st-cell-green' : 'st-cell-red'],
+            ['% Windows with Clean Phase 2',
+                Format.number(pair.pct_clean_phase2, 1) + '%',
+                pair.pct_clean_phase2 >= 60 ? 'st-cell-green' : pair.pct_clean_phase2 >= 30 ? 'st-cell-yellow' : 'st-cell-red'],
+            ['Avg Flips / Window', Format.number(pair.avg_flips, 2)],
+            ['Max Flips (any window)', pair.max_flips_any_window,
+                pair.max_flips_any_window <= 5 ? 'st-cell-green' : pair.max_flips_any_window <= 10 ? 'st-cell-yellow' : 'st-cell-red'],
+            ['Stop Scaling After',
+                `${pair.stop_scaling_threshold} flips`,
+                ''],
+            ['Avg Flip Loss / Window', Format.number(pair.avg_flip_loss, 4)],
+        ]);
+
+        // Section 3 — Flip distribution visual
+        container.innerHTML += flipDistHTML;
+
+        // Section 4 — Viability ratios
+        container.innerHTML += section('💰 Viability — Flip Cost vs Spread Potential', [
+            ['Max Single Flip / Max Spread',
+                Format.number(pair.ratio_maxflip_maxspread, 4),
+                ratioColor(pair.ratio_maxflip_maxspread)],
+            ['Total Flip Loss / Max Spread',
+                Format.number(pair.ratio_totalflip_maxspread, 4),
+                ratioColor(pair.ratio_totalflip_maxspread)],
+            ['Total Flip Loss / Avg Spread  ← primary',
+                Format.number(pair.ratio_totalflip_avgspread, 4),
+                ratioColor(pair.ratio_totalflip_avgspread)],
+            ['Viability Verdict', viabilityLabel, viabilityCls],
+        ]);
     },
 
     /* ── Panel 3: All Windows Table ──────────────────────── */
@@ -259,6 +349,8 @@ const DivergenceUI = {
                     <td>${Format.number(w.max_single_flip_loss, 4)}</td>
                     <td class="${growthClass}">${Format.number(w.spread_growth, 4)}</td>
                     <td>${Format.number(w.spread_slope, 6)}</td>
+                    <td>${w.phase1_length ?? '—'}</td>
+                    <td class="${(w.post_flip_growth > 0) ? 'st-cell-green' : 'st-cell-red'}">${Format.number(w.post_flip_growth, 4)}</td>
                     <td>${Format.number(w.window_score, 6)}</td>
                 </tr>`;
         }).join('');
@@ -287,6 +379,8 @@ const DivergenceUI = {
                             <th>Max Single Loss</th>
                             <th>Spread Growth</th>
                             <th>Slope</th>
+                            <th>Phase 1 Bars</th>
+                            <th>Post-Flip Growth</th>
                             <th>Window Score</th>
                         </tr>
                     </thead>

@@ -58,6 +58,69 @@ def compute_spread_slope(spread: np.ndarray) -> float:
         return 0.0
 
 
+def compute_phase_metrics(corr: pd.DataFrame) -> dict:
+    """
+    Compute Phase 1 / Phase 2 metrics from a single window correlation DataFrame.
+
+    Phase 1 = bars from start until last flip occurs
+    Phase 2 = bars from last flip until window end
+
+    Args:
+        corr: output of compute_correlation() for one window
+
+    Returns dict with:
+        last_flip_bar      - index of last flip (0 if no flips)
+        phase1_length      - number of bars in Phase 1 (= last_flip_bar + 1)
+        phase2_length      - number of bars in Phase 2
+        post_flip_spread_growth - spread[-1] - spread[last_flip_bar]
+        has_clean_phase2   - True if phase2_length >= 10 and no flips in Phase 2
+    """
+    if corr.empty:
+        return {
+            "last_flip_bar": 0,
+            "phase1_length": 0,
+            "phase2_length": 0,
+            "post_flip_spread_growth": 0.0,
+            "has_clean_phase2": False,
+        }
+
+    flip_indices = corr.index[corr["flip_occurred"] == True].tolist()
+    spread_vals = corr["index_spread"].values.astype(float)
+    n = len(spread_vals)
+
+    if len(flip_indices) == 0:
+        # No flips at all — entire window is clean Phase 2
+        return {
+            "last_flip_bar": 0,
+            "phase1_length": 0,
+            "phase2_length": n,
+            "post_flip_spread_growth": float(spread_vals[-1] - spread_vals[0]),
+            "has_clean_phase2": True,
+        }
+
+    # corr uses integer positional index internally after reset
+    # flip_occurred is a boolean column — get positional indices
+    flip_positions = [i for i, v in enumerate(corr["flip_occurred"].values) if v]
+    last_flip_pos = flip_positions[-1]
+
+    phase1_length = last_flip_pos + 1
+    phase2_length = n - phase1_length
+
+    # Spread growth purely in Phase 2 (from last flip bar to end)
+    post_flip_growth = float(spread_vals[-1] - spread_vals[last_flip_pos])
+
+    # Clean Phase 2 = at least 10 bars AND no flips after last_flip_pos
+    has_clean_phase2 = phase2_length >= 10
+
+    return {
+        "last_flip_bar": last_flip_pos,
+        "phase1_length": phase1_length,
+        "phase2_length": phase2_length,
+        "post_flip_spread_growth": round(post_flip_growth, 4),
+        "has_clean_phase2": has_clean_phase2,
+    }
+
+
 # ── Single Pair Sliding Window ───────────────────────────────────
 
 def run_sliding_windows(
@@ -116,6 +179,13 @@ def run_sliding_windows(
         w_scores = []
         windows_data = []
 
+        # NEW accumulation lists for phase metrics
+        w_phase1_length = []
+        w_phase2_length = []
+        w_post_flip_growth = []
+        w_clean_phase2 = []
+        w_max_single_flip_loss = []
+
         best_window_score = -float("inf")
         best_window_start_ts = None
 
@@ -130,6 +200,14 @@ def run_sliding_windows(
                     continue
 
                 m = compute_raw_metrics(corr)
+
+                # Phase metrics
+                pm = compute_phase_metrics(corr)
+                w_phase1_length.append(pm["phase1_length"])
+                w_phase2_length.append(pm["phase2_length"])
+                w_post_flip_growth.append(pm["post_flip_spread_growth"])
+                w_clean_phase2.append(pm["has_clean_phase2"])
+                w_max_single_flip_loss.append(m["max_single_flip_loss"])
 
                 spread_vals = corr["index_spread"].values.astype(np.float64)
                 spread_growth = float(spread_vals[-1] - spread_vals[0])
@@ -170,6 +248,8 @@ def run_sliding_windows(
                     "spread_growth":  round(spread_growth, 4),
                     "spread_slope":   round(spread_slope, 6),
                     "window_score":   round(w_score, 6),
+                    "phase1_length":  pm["phase1_length"],
+                    "post_flip_growth": round(pm["post_flip_spread_growth"], 4),
                 })
 
             except Exception as e:
@@ -197,6 +277,58 @@ def run_sliding_windows(
         avg_flip_loss     = float(np.mean(w_flip_loss))
         avg_window_score  = float(np.mean(w_scores)) if w_scores else 0.0
 
+        # ── Phase 1 metrics ──────────────────────────────────────────
+        avg_phase1_length    = float(np.mean(w_phase1_length)) if w_phase1_length else 0.0
+        avg_phase2_length    = float(np.mean(w_phase2_length)) if w_phase2_length else 0.0
+        avg_post_flip_growth = float(np.mean(w_post_flip_growth)) if w_post_flip_growth else 0.0
+        pct_clean_phase2     = float(sum(w_clean_phase2) / windows_tested * 100) if windows_tested else 0.0
+
+        # ── Flip distribution buckets ────────────────────────────────
+        flip_counts = w_flips
+        dist_zero   = int(sum(1 for f in flip_counts if f == 0))
+        dist_low    = int(sum(1 for f in flip_counts if 1 <= f <= 3))
+        dist_mid    = int(sum(1 for f in flip_counts if 4 <= f <= 7))
+        dist_high   = int(sum(1 for f in flip_counts if f >= 8))
+        max_flips_any_window = int(max(flip_counts)) if flip_counts else 0
+
+        # Stop-scaling threshold = avg + 1 std (round up)
+        flips_std = float(np.std(flip_counts)) if len(flip_counts) > 1 else 0.0
+        stop_scaling_threshold = int(np.ceil(avg_flips + flips_std))
+
+        # ── Cost vs Spread ratios ────────────────────────────────────
+        # Use per-window values for ratio computation (more accurate than using aggregated)
+        # Compute per-window ratios then average
+        ratio_max_flip_vs_max_spread_list = []
+        ratio_total_flip_vs_max_spread_list = []
+        ratio_total_flip_vs_avg_spread_list = []
+
+        for i in range(windows_tested):
+            ms  = w_max_spread[i]
+            avs = w_avg_spread[i]
+            mfl = w_max_single_flip_loss[i]
+            tfl = w_flip_loss[i]
+
+            if ms > 0:
+                ratio_max_flip_vs_max_spread_list.append(mfl / ms)
+                ratio_total_flip_vs_max_spread_list.append(tfl / ms)
+            if avs > 0:
+                ratio_total_flip_vs_avg_spread_list.append(tfl / avs)
+
+        avg_ratio_maxflip_maxspread   = round(float(np.mean(ratio_max_flip_vs_max_spread_list)), 4)   if ratio_max_flip_vs_max_spread_list   else 0.0
+        avg_ratio_totalflip_maxspread = round(float(np.mean(ratio_total_flip_vs_max_spread_list)), 4) if ratio_total_flip_vs_max_spread_list else 0.0
+        avg_ratio_totalflip_avgspread = round(float(np.mean(ratio_total_flip_vs_avg_spread_list)), 4) if ratio_total_flip_vs_avg_spread_list else 0.0
+
+        # Viability verdict based on primary ratio (total flip loss / avg spread)
+        # < 0.30 = Strong, 0.30-0.60 = Moderate, 0.60-1.0 = Tight, > 1.0 = Not viable
+        if avg_ratio_totalflip_avgspread < 0.30:
+            viability = "strong"
+        elif avg_ratio_totalflip_avgspread < 0.60:
+            viability = "moderate"
+        elif avg_ratio_totalflip_avgspread < 1.0:
+            viability = "tight"
+        else:
+            viability = "not_viable"
+
         # Pair-level divergence score (higher = better)
         score = avg_spread_slope * (pct_zero_crossing_windows / 100) * avg_max_spread
 
@@ -218,6 +350,27 @@ def run_sliding_windows(
             "best_window_start": best_window_start_ts,
             "avg_window_score": round(avg_window_score, 6),
             "score": round(score, 6),
+
+            # Phase 1 / Phase 2
+            "avg_phase1_length":    round(avg_phase1_length, 1),
+            "avg_phase2_length":    round(avg_phase2_length, 1),
+            "avg_post_flip_growth": round(avg_post_flip_growth, 4),
+            "pct_clean_phase2":     round(pct_clean_phase2, 2),
+
+            # Flip capacity planning
+            "max_flips_any_window":     max_flips_any_window,
+            "stop_scaling_threshold":   stop_scaling_threshold,
+            "flip_dist_zero":           dist_zero,
+            "flip_dist_low":            dist_low,    # 1-3 flips
+            "flip_dist_mid":            dist_mid,    # 4-7 flips
+            "flip_dist_high":           dist_high,   # 8+ flips
+
+            # Cost vs spread ratios
+            "ratio_maxflip_maxspread":   avg_ratio_maxflip_maxspread,
+            "ratio_totalflip_maxspread": avg_ratio_totalflip_maxspread,
+            "ratio_totalflip_avgspread": avg_ratio_totalflip_avgspread,
+            "viability":                 viability,
+
             "windows_data": windows_data,
         }
 
