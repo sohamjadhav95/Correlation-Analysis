@@ -58,6 +58,25 @@ def compute_spread_slope(spread: np.ndarray) -> float:
         return 0.0
 
 
+def make_baseline_ohlc(reference_ohlc: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate a synthetic flat OHLC DataFrame that always stays at price 1.0.
+    Uses the same DatetimeIndex as the reference asset.
+    compute_correlation() will produce idx2 = 1000 throughout,
+    making spread = idx1 - 1000 = pure asset movement.
+    """
+    flat = pd.DataFrame(
+        {
+            "open":  1.0,
+            "high":  1.0,
+            "low":   1.0,
+            "close": 1.0,
+        },
+        index=reference_ohlc.index,
+    )
+    return flat
+
+
 def compute_phase_metrics(corr: pd.DataFrame) -> dict:
     """
     Compute Phase 1 / Phase 2 metrics from a single window correlation DataFrame.
@@ -392,6 +411,7 @@ def run_divergence_scan(
     pairs: list[tuple],      # [(sym1, sym2), ...]
     window_bars: int,
     on_pair_complete: Optional[callable] = None,
+    baseline_key: str = "__BASELINE__",
 ) -> dict:
     """
     Run full divergence scan across all pairs.
@@ -426,16 +446,27 @@ def run_divergence_scan(
 
     def _run_pair(args):
         idx, sym1, sym2 = args
-        ohlc1 = df1_map.get(sym1)
-        ohlc2 = df1_map.get(sym2)
-        if ohlc1 is None or ohlc2 is None or ohlc1.empty or ohlc2.empty:
-            return idx, {
-                "status": "no_data",
-                "pair": f"{sym1}/{sym2}",
-                "sym1": sym1,
-                "sym2": sym2,
-                "pair_index": idx,
-            }
+
+        # Resolve baseline — generate flat OHLC from the real asset's index
+        if sym1 == baseline_key:
+            ohlc2 = df1_map.get(sym2)
+            if ohlc2 is None or ohlc2.empty:
+                return idx, {"status": "no_data", "pair": f"{sym1}/{sym2}",
+                             "sym1": sym1, "sym2": sym2, "pair_index": idx}
+            ohlc1 = make_baseline_ohlc(ohlc2)
+        elif sym2 == baseline_key:
+            ohlc1 = df1_map.get(sym1)
+            if ohlc1 is None or ohlc1.empty:
+                return idx, {"status": "no_data", "pair": f"{sym1}/{sym2}",
+                             "sym1": sym1, "sym2": sym2, "pair_index": idx}
+            ohlc2 = make_baseline_ohlc(ohlc1)
+        else:
+            ohlc1 = df1_map.get(sym1)
+            ohlc2 = df1_map.get(sym2)
+            if ohlc1 is None or ohlc2 is None or ohlc1.empty or ohlc2.empty:
+                return idx, {"status": "no_data", "pair": f"{sym1}/{sym2}",
+                             "sym1": sym1, "sym2": sym2, "pair_index": idx}
+
         result = run_sliding_windows(ohlc1, ohlc2, sym1, sym2, window_bars)
         result["pair_index"] = idx
         return idx, result

@@ -347,6 +347,33 @@
                     <!-- Symbol List -->
                     <div class="div-form-col">
                         <label class="div-label">Symbols (2–10)</label>
+
+                        <!-- Quick-select preset chips -->
+                        <div class="div-preset-chips" id="div-preset-chips">
+                            <!-- Forex presets -->
+                            <span class="div-chip-group-label">Forex:</span>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('EURUSDm')">EURUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('GBPUSDm')">GBPUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('USDJPYm')">USDJPYm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('USDCHFm')">USDCHFm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('AUDUSDm')">AUDUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('XAUUSDm')">XAUUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('XAGUSDm')">XAGUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('US30m')">US30m</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('NAS100m')">NAS100m</button>
+                            <!-- Crypto presets -->
+                            <span class="div-chip-group-label" style="margin-left:8px">Crypto:</span>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('BTCUSDT')">BTCUSDT</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('ETHUSDT')">ETHUSDT</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('SOLUSDT')">SOLUSDT</button>
+                            <!-- Special -->
+                            <span class="div-chip-group-label" style="margin-left:8px">Special:</span>
+                            <button class="div-chip div-chip-baseline" onclick="DivergenceTab.addBaseline()"
+                                title="A flat horizontal line at 1000. Measures pure asset movement with no second-asset noise.">
+                                📏 Baseline
+                            </button>
+                        </div>
+
                         <div id="div-symbol-list">
                             <div class="div-symbol-row">
                                 <input type="text" class="input div-symbol-input" placeholder="e.g. EURUSDm" value="">
@@ -524,67 +551,72 @@
                 </div>
             </div>
             <div class="modal-body">
-    
+
                 <!-- Loading state -->
                 <div id="div-window-loading" class="st-detail-loading">
                     <div class="st-detail-spinner"></div>
                     <p>Loading window analysis...</p>
                 </div>
-    
+
                 <!-- Results -->
                 <div id="div-window-results" class="hidden">
-    
+
                     <!-- Summary metrics table -->
                     <div id="div-window-metrics" style="margin-bottom:24px"></div>
-    
+
                     <!-- Row 1: Index correlation + Spread -->
                     <div class="st-detail-charts" style="margin-bottom:24px">
                         <div class="st-detail-chart-block">
-                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📈 Asset Index Correlation</h3>
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📈 Asset Index
+                                Correlation</h3>
                             <div class="chart-wrapper" style="height:280px">
                                 <canvas id="div-window-chart-corr"></canvas>
                             </div>
                         </div>
                         <div class="st-detail-chart-block">
-                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📉 Index Spread Over Time</h3>
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📉 Index Spread Over
+                                Time</h3>
                             <div class="chart-wrapper" style="height:280px">
                                 <canvas id="div-window-chart-spread"></canvas>
                             </div>
                         </div>
                     </div>
-    
+
                     <!-- Row 2: Flip loss + Spread distribution -->
                     <div class="st-detail-charts" style="margin-bottom:24px">
                         <div class="st-detail-chart-block">
-                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">💥 Flip Loss Over Time</h3>
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">💥 Flip Loss Over Time
+                            </h3>
                             <div class="chart-wrapper" style="height:240px">
                                 <canvas id="div-window-chart-fliploss"></canvas>
                             </div>
                         </div>
                         <div class="st-detail-chart-block">
-                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📊 Spread Distribution</h3>
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📊 Spread Distribution
+                            </h3>
                             <div class="chart-wrapper" style="height:240px">
                                 <canvas id="div-window-chart-hist"></canvas>
                             </div>
                         </div>
                     </div>
-    
+
                     <!-- Row 3: Position breakdown (centred, half-width) -->
                     <div style="display:flex;justify-content:center;margin-bottom:24px">
                         <div style="width:50%">
-                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px;text-align:center">🧭 Position Breakdown</h3>
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px;text-align:center">🧭
+                                Position Breakdown</h3>
                             <div class="chart-wrapper" style="height:260px">
                                 <canvas id="div-window-chart-donut"></canvas>
                             </div>
                         </div>
                     </div>
-    
+
                     <!-- Full bar data table -->
                     <div style="margin-top:8px">
                         <h3 class="section-title" style="font-size:.85rem">🗂️ Bar Data</h3>
                         <div style="margin-bottom:8px">
-                            <input type="text" id="div-window-search" class="search-input"
-                                   placeholder="Search..." style="width:240px">
+                            <input type="text" id="div-window-search" class="search-input" placeholder="Search..."
+                                style="width:240px">
                         </div>
                         <div class="table-container" style="max-height:320px">
                             <table class="data-table" id="div-window-table">
@@ -593,7 +625,7 @@
                             </table>
                         </div>
                     </div>
-    
+
                 </div>
             </div>
         </div>
@@ -653,15 +685,70 @@
                 document.getElementById('btn-divergence-tab').classList.toggle('active', this._tabVisible);
             },
 
-            addSymbol() {
+            // Add a blank symbol row
+            addSymbol(value = '') {
                 const list = document.getElementById('div-symbol-list');
                 const count = list.querySelectorAll('.div-symbol-row').length;
                 if (count >= 10) { Toast.show('Maximum 10 symbols', 'info'); return; }
                 const row = document.createElement('div');
                 row.className = 'div-symbol-row';
                 row.innerHTML = `
-                    <input type="text" class="input div-symbol-input" placeholder="e.g. USDJPYm">
-                    <button class="btn btn-sm btn-secondary div-remove-btn" onclick="DivergenceTab.removeSymbol(this)">−</button>`;
+                    <input type="text" class="input div-symbol-input"
+                           placeholder="e.g. USDJPYm" value="${value}">
+                    <button class="btn btn-sm btn-secondary div-remove-btn"
+                            onclick="DivergenceTab.removeSymbol(this)">−</button>`;
+                list.appendChild(row);
+            },
+
+            // Add a preset symbol — checks for duplicates first
+            addPreset(symbol) {
+                const existing = Array.from(
+                    document.querySelectorAll('.div-symbol-input')
+                ).map(i => i.value.trim());
+
+                if (existing.includes(symbol)) {
+                    Toast.show(`${symbol} already in list`, 'info');
+                    return;
+                }
+
+                // Fill first empty slot, otherwise add new row
+                const emptyInput = Array.from(
+                    document.querySelectorAll('.div-symbol-input')
+                ).find(i => i.value.trim() === '');
+
+                if (emptyInput) {
+                    emptyInput.value = symbol;
+                } else {
+                    this.addSymbol(symbol);
+                }
+            },
+
+            // Add the special Baseline Line entry
+            addBaseline() {
+                const BASELINE = '__BASELINE__';
+                const existing = Array.from(
+                    document.querySelectorAll('.div-symbol-input')
+                ).map(i => i.value.trim());
+
+                if (existing.includes(BASELINE)) {
+                    Toast.show('Baseline already added — only one allowed', 'info');
+                    return;
+                }
+
+                const list = document.getElementById('div-symbol-list');
+                const count = list.querySelectorAll('.div-symbol-row').length;
+                if (count >= 10) { Toast.show('Maximum 10 symbols', 'info'); return; }
+
+                const row = document.createElement('div');
+                row.className = 'div-symbol-row div-baseline-row';
+                row.innerHTML = `
+                    <input type="text" class="input div-symbol-input div-baseline-input"
+                           value="${BASELINE}" readonly
+                           style="color:var(--accent-purple);font-weight:600;cursor:default"
+                           title="Flat horizontal line — measures pure asset movement">
+                    <span class="div-baseline-badge">📏 Baseline</span>
+                    <button class="btn btn-sm btn-secondary div-remove-btn"
+                            onclick="DivergenceTab.removeSymbol(this)">−</button>`;
                 list.appendChild(row);
             },
 

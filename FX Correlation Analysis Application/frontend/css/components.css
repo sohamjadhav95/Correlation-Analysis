@@ -896,3 +896,64 @@
     color: var(--text-muted);
     margin-bottom: 10px;
 }
+
+/* ── Divergence Scanner — Quick-Select Chips ─────────────── */
+.div-preset-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.div-chip-group-label {
+    font-size: .72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
+}
+
+.div-chip {
+    padding: 3px 9px;
+    border-radius: 12px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: .75rem;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+    white-space: nowrap;
+}
+
+.div-chip:hover {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #fff;
+}
+
+.div-chip-baseline {
+    border-color: var(--accent-purple);
+    color: var(--accent-purple);
+    font-weight: 600;
+}
+
+.div-chip-baseline:hover {
+    background: var(--accent-purple);
+    border-color: var(--accent-purple);
+    color: #fff;
+}
+
+/* ── Baseline Row in Symbol List ─────────────────────────── */
+.div-baseline-row {
+    align-items: center;
+    gap: 6px;
+}
+
+.div-baseline-badge {
+    font-size: .72rem;
+    color: var(--accent-purple);
+    white-space: nowrap;
+    font-weight: 600;
+}

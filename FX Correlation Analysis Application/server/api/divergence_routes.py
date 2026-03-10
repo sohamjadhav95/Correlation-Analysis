@@ -33,7 +33,13 @@ def _execute_divergence_scan(job_id: str, req_dict: dict) -> dict:
 
     # Fetch and resample OHLC for every symbol up front (shared across all pairs)
     df_map = {}  # {symbol: ohlc_dataframe}
+    
+    BASELINE_KEY = "__BASELINE__"
+
     for symbol in req.symbols:
+        # Baseline is synthetic — skip real data fetch
+        if symbol == BASELINE_KEY:
+            continue  # will be generated per-pair at scan time
         try:
             ticks = fetch_and_cache(req.domain.value, symbol, start_dt, end_dt)
             if not ticks.empty:
@@ -55,7 +61,16 @@ def _execute_divergence_scan(job_id: str, req_dict: dict) -> dict:
 
     # Only scan pairs where both symbols have data
     all_pairs = generate_pair_combinations(req.symbols)
-    valid_pairs = [(s1, s2) for s1, s2 in all_pairs if s1 in df_map and s2 in df_map]
+    
+    # A pair is valid if:
+    # - both are real symbols with data, OR
+    # - one is BASELINE and the other has data
+    valid_pairs = []
+    for s1, s2 in all_pairs:
+        s1_ok = s1 == BASELINE_KEY or s1 in df_map
+        s2_ok = s2 == BASELINE_KEY or s2 in df_map
+        if s1_ok and s2_ok:
+            valid_pairs.append((s1, s2))
 
     if not valid_pairs:
         return {
@@ -71,6 +86,7 @@ def _execute_divergence_scan(job_id: str, req_dict: dict) -> dict:
         pairs=valid_pairs,
         window_bars=req.window_bars,
         on_pair_complete=on_progress,
+        baseline_key=BASELINE_KEY,
     )
 
     # Attach request context for frontend use
