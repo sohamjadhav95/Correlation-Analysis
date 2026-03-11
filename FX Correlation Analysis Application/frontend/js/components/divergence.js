@@ -459,7 +459,7 @@ const DivergenceUI = {
         document.getElementById('div-window-title').textContent =
             `Window Analysis: ${startLabel} → ${endLabel} UTC`;
         document.getElementById('div-window-subtitle').textContent =
-            `${scanCtx.sym1} / ${scanCtx.sym2} · ${scanCtx.timeframe} · ${scanCtx.domain}`;
+            `${scanCtx.sym1.replace('__BASELINE__', '📏 Baseline')} / ${scanCtx.sym2.replace('__BASELINE__', '📏 Baseline')} · ${scanCtx.timeframe} · ${scanCtx.domain}`;
 
         // Reset
         loading.classList.remove('hidden');

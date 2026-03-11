@@ -116,11 +116,14 @@ def run_analysis(
 
     Returns dict with keys: result (DataFrame), metrics (dict), data (list[dict])
     """
-    # Fetch tick data for both symbols
-    df1 = fetch_and_cache(domain, symbol_1, start, end, on_progress)
-    df2 = fetch_and_cache(domain, symbol_2, start, end, on_progress)
+    BASELINE_KEY = "__BASELINE__"
 
-    if df1.empty or df2.empty:
+    df1 = fetch_and_cache(domain, symbol_1, start, end, on_progress) \
+          if symbol_1 != BASELINE_KEY else None
+    df2 = fetch_and_cache(domain, symbol_2, start, end, on_progress) \
+          if symbol_2 != BASELINE_KEY else None
+
+    if (df1 is not None and df1.empty) or (df2 is not None and df2.empty):
         return {
             "status": "error",
             "message": "No tick data available for one or both symbols",
@@ -130,10 +133,18 @@ def run_analysis(
         }
 
     # Resample to OHLC
-    ohlc1 = resample_ticks_to_ohlc(df1, timeframe)
-    ohlc2 = resample_ticks_to_ohlc(df2, timeframe)
+    from .divergence_scanner import make_baseline_ohlc
 
-    if ohlc1.empty or ohlc2.empty:
+    ohlc1 = resample_ticks_to_ohlc(df1, timeframe) if df1 is not None else None
+    ohlc2 = resample_ticks_to_ohlc(df2, timeframe) if df2 is not None else None
+
+    # Generate flat baseline OHLC using the real asset's index as reference
+    if symbol_1 == BASELINE_KEY:
+        ohlc1 = make_baseline_ohlc(ohlc2)
+    if symbol_2 == BASELINE_KEY:
+        ohlc2 = make_baseline_ohlc(ohlc1)
+
+    if ohlc1 is None or ohlc2 is None or ohlc1.empty or ohlc2.empty:
         return {
             "status": "error",
             "message": "No OHLC bars generated. Try a larger timeframe or wider date range.",
