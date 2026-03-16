@@ -261,8 +261,19 @@ const DivergenceUI = {
         // ── Build all sections ────────────────────────────────
         container.innerHTML = '';
 
+        // ── Profit % calculations (per-window) ────────────────
+        const wins = pair.windows_data || [];
+        const totalWins = wins.length || 1;
+        const maxProfitCount = wins.filter(w => w.total_flip_loss < w.max_spread).length;
+        const avgProfitCount = wins.filter(w => w.total_flip_loss < w.avg_spread).length;
+        const maxProfitPct = (maxProfitCount / totalWins) * 100;
+        const avgProfitPct = (avgProfitCount / totalWins) * 100;
+        const profitCls = (pct) => pct >= 60 ? 'st-cell-green' : pct >= 30 ? 'st-cell-yellow' : 'st-cell-red';
+
         // Section 1 — Window overview
         container.innerHTML += section('📋 Window Overview', [
+            ['Max Profit %', Format.number(maxProfitPct, 1) + '%', profitCls(maxProfitPct)],
+            ['Avg Profit %', Format.number(avgProfitPct, 1) + '%', profitCls(avgProfitPct)],
             ['Windows Tested', pair.windows_tested],
             ['Windows with 0 Crossings', pair.windows_zero_crossings],
             ['% Zero-Crossing Windows', Format.number(pair.pct_zero_crossing_windows, 2) + '%'],
