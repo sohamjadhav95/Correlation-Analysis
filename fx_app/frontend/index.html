@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Forex & Crypto Correlation Analysis Platform with Super Test Mode">
+    <title>FX Correlation Analysis Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/variables.css?v=3">
+    <link rel="stylesheet" href="/css/base.css?v=3">
+    <link rel="stylesheet" href="/css/layout.css?v=3">
+    <link rel="stylesheet" href="/css/components.css?v=3">
+    <link rel="stylesheet" href="/css/charts.css?v=3">
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+</head>
+
+<body>
+    <!-- ── Header ──────────────────────────────────────── -->
+    <header id="app-header">
+        <div class="header-left">
+            <h1 class="logo">
+                <span class="logo-icon">📊</span>
+                <span class="logo-text">FX Correlation<span class="logo-accent">Platform</span></span>
+            </h1>
+        </div>
+        <div class="header-tabs" id="domain-tabs">
+            <button class="tab-btn active" data-domain="forex" id="tab-forex">
+                <span class="tab-icon">💱</span> Forex
+            </button>
+            <button class="tab-btn" data-domain="crypto" id="tab-crypto">
+                <span class="tab-icon">₿</span> Crypto Futures
+            </button>
+            <button class="tab-btn" id="btn-divergence-tab">
+                <span class="tab-icon">🔍</span> Divergence Scanner
+            </button>
+            <button class="tab-btn" id="btn-absolute-flip-tab">
+                <span class="tab-icon">📏</span> Absolute Flip
+            </button>
+        </div>
+        <div class="header-right">
+            <div class="connection-status" id="connection-status">
+                <span class="status-dot"></span>
+                <span class="status-text">Ready</span>
+            </div>
+            <button class="icon-btn" id="theme-btn" title="Toggle Theme">☀️</button>
+            <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
+        </div>
+    </header>
+
+    <!-- ── Main Layout ─────────────────────────────────── -->
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">📂 Data Configuration</h3>
+
+                <div class="input-group">
+                    <label for="symbol-1">Asset 1</label>
+                    <input type="text" id="symbol-1" class="input" value="XAUUSDm" placeholder="e.g. XAUUSDm">
+                </div>
+                <div class="input-group">
+                    <label for="symbol-2">Asset 2</label>
+                    <input type="text" id="symbol-2" class="input" value="USDJPYm" placeholder="e.g. USDJPYm">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">⏱️ Timeframe</h3>
+                <div class="input-group">
+                    <select id="timeframe" class="input">
+                        <option value="10s">10 Seconds</option>
+                        <option value="30s">30 Seconds</option>
+                        <option value="1min" selected>1 Minute</option>
+                        <option value="5min">5 Minutes</option>
+                        <option value="15min">15 Minutes</option>
+                        <option value="30min">30 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="4h">4 Hours</option>
+                        <option value="1D">1 Day</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">📅 Date / Time Range</h3>
+                <div class="input-group">
+                    <label for="start-date">Start Date</label>
+                    <input type="date" id="start-date" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="start-time">Start Time (UTC)</label>
+                    <input type="time" id="start-time" class="input" value="00:00">
+                </div>
+                <div class="input-group">
+                    <label for="end-date">End Date</label>
+                    <input type="date" id="end-date" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="end-time">End Time (UTC)</label>
+                    <input type="time" id="end-time" class="input" value="23:59">
+                </div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- Mode Toggle -->
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">🔬 Analysis Mode</h3>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="single" id="mode-single">Single Analysis</button>
+                    <button class="mode-btn" data-mode="compare" id="mode-compare">Compare (A/B)</button>
+                    <button class="mode-btn" data-mode="super" id="mode-super">⚡ Super Test</button>
+                </div>
+            </div>
+
+            <!-- Set B Config (hidden by default) -->
+            <div id="set-b-config" class="sidebar-section hidden">
+                <h3 class="sidebar-title">📂 Set B Configuration</h3>
+                <div class="input-group">
+                    <label for="symbol-1b">Asset 1 (B)</label>
+                    <input type="text" id="symbol-1b" class="input" value="XAUUSDm">
+                </div>
+                <div class="input-group">
+                    <label for="symbol-2b">Asset 2 (B)</label>
+                    <input type="text" id="symbol-2b" class="input" value="USDJPYm">
+                </div>
+                <div class="input-group">
+                    <label for="timeframe-b">Timeframe (B)</label>
+                    <select id="timeframe-b" class="input">
+                        <option value="10s">10 Seconds</option>
+                        <option value="30s">30 Seconds</option>
+                        <option value="1min" selected>1 Minute</option>
+                        <option value="5min">5 Minutes</option>
+                        <option value="15min">15 Minutes</option>
+                        <option value="30min">30 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="4h">4 Hours</option>
+                        <option value="1D">1 Day</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="start-date-b">Start Date (B)</label>
+                    <input type="date" id="start-date-b" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="start-time-b">Start Time (B)</label>
+                    <input type="time" id="start-time-b" class="input" value="00:00">
+                </div>
+                <div class="input-group">
+                    <label for="end-date-b">End Date (B)</label>
+                    <input type="date" id="end-date-b" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="end-time-b">End Time (B)</label>
+                    <input type="time" id="end-time-b" class="input" value="23:59">
+                </div>
+            </div>
+
+            <!-- Super Test Config (hidden by default) -->
+            <div id="super-test-config" class="sidebar-section hidden">
+                <h3 class="sidebar-title">⚡ Super Test Settings</h3>
+                <div class="input-group">
+                    <label for="st-date">Test Date</label>
+                    <input type="date" id="st-date" class="input">
+                </div>
+                <div class="input-group">
+                    <label for="st-start">Start Time (UTC)</label>
+                    <input type="time" id="st-start" class="input" value="00:00">
+                </div>
+                <div class="input-group">
+                    <label for="st-end">End Time (UTC)</label>
+                    <input type="time" id="st-end" class="input" value="08:00">
+                </div>
+                <div class="input-group">
+                    <label for="st-interval">Interval (minutes)</label>
+                    <input type="number" id="st-interval" class="input" value="5" min="1" max="1440">
+                </div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- Fetch + Run -->
+            <div class="sidebar-section">
+                <button class="btn btn-primary" id="btn-fetch">
+                    <span class="btn-icon">📡</span> Fetch Data
+                </button>
+                <button class="btn btn-accent" id="btn-run" style="margin-top: 8px;">
+                    <span class="btn-icon">▶</span> Run Analysis
+                </button>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progress-section" class="sidebar-section hidden">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Fetching data...</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+            <!-- Welcome State -->
+            <div id="view-welcome" class="view active">
+                <div class="welcome-card">
+                    <div class="welcome-icon">📊</div>
+                    <h2>FX Correlation Analysis Platform</h2>
+                    <p>Configure your assets, timeframe, and date range in the sidebar, then click <strong>Fetch
+                            Data</strong> followed by <strong>Run Analysis</strong>.</p>
+                    <div class="welcome-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">💱</span>
+                            <span>Forex via MT5</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">₿</span>
+                            <span>Crypto via Binance</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">⚡</span>
+                            <span>Super Test Mode</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results View -->
+            <div id="view-analysis" class="view">
+                <!-- Summary Metrics -->
+                <div id="metrics-section" class="content-section">
+                    <h2 class="section-title">📌 Summary Metrics</h2>
+                    <div id="metrics-table-container"></div>
+                </div>
+
+                <!-- Charts -->
+                <div id="charts-section" class="content-section">
+                    <h2 class="section-title">📈 Asset Index Correlation</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-correlation" width="800" height="400"></canvas>
+                    </div>
+
+                    <h2 class="section-title">📉 Index Spread Over Time</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-spread" width="800" height="300"></canvas>
+                    </div>
+
+                    <h2 class="section-title">💸 Flip Loss Over Time</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-flip-loss" width="800" height="250"></canvas>
+                    </div>
+
+                    <div class="charts-row">
+                        <div class="chart-half">
+                            <h2 class="section-title">📊 Spread Distribution</h2>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-spread-dist" width="400" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-half">
+                            <h2 class="section-title">🔄 Position Breakdown</h2>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-position" width="400" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div id="data-section" class="content-section">
+                    <h2 class="section-title">🗂️ Output Data</h2>
+                    <div class="table-controls">
+                        <input type="text" id="table-search" class="input input-sm" placeholder="Search...">
+                        <button class="btn btn-sm btn-secondary" id="btn-download-csv">
+                            💾 Download CSV
+                        </button>
+                    </div>
+                    <div class="table-container" id="data-table-container">
+                        <table id="data-table" class="data-table">
+                            <thead id="data-table-head"></thead>
+                            <tbody id="data-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="table-pagination" id="pagination"></div>
+                </div>
+            </div>
+
+            <!-- Comparison View -->
+            <div id="view-compare" class="view">
+                <div id="compare-metrics-section" class="content-section">
+                    <h2 class="section-title">📌 Comparison Summary</h2>
+                    <div id="compare-metrics-container"></div>
+                </div>
+                <div class="compare-grid">
+                    <div class="compare-col" id="compare-set-a">
+                        <h3 class="compare-label">Set A</h3>
+                        <div class="chart-wrapper"><canvas id="chart-corr-a" width="600" height="350"></canvas></div>
+                        <div class="chart-wrapper"><canvas id="chart-spread-a" width="600" height="250"></canvas></div>
+                    </div>
+                    <div class="compare-col" id="compare-set-b">
+                        <h3 class="compare-label">Set B</h3>
+                        <div class="chart-wrapper"><canvas id="chart-corr-b" width="600" height="350"></canvas></div>
+                        <div class="chart-wrapper"><canvas id="chart-spread-b" width="600" height="250"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Super Test View -->
+            <div id="view-super-test" class="view">
+                <div class="content-section">
+                    <h2 class="section-title">⚡ Super Test — Rolling Start Analysis</h2>
+                    <p class="section-desc">Each window starts <em>N minutes later</em> but runs to the same fixed end
+                        time. Reveals the best entry time for the session.</p>
+
+                    <!-- Progress -->
+                    <div id="super-test-progress" class="hidden">
+                        <div class="progress-bar-container large">
+                            <div class="progress-bar" id="st-progress-bar"></div>
+                        </div>
+                        <p class="progress-text" id="st-progress-text">Processing windows...</p>
+                    </div>
+
+                    <!-- Summary card -->
+                    <div id="super-test-summary" class="hidden"></div>
+
+                    <!-- Ranking table (top N) -->
+                    <div id="super-test-ranking-container" class="content-section" style="margin-top:24px"></div>
+
+                    <!-- All windows chronological -->
+                    <div id="super-test-all-container" class="content-section" style="margin-top:24px"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ── Divergence Scanner (standalone overlay tab) ── -->
+    <div id="divergence-scanner-tab" class="div-scanner-tab hidden">
+        <div class="div-scanner-inner">
+
+            <!-- Controls Panel -->
+            <div class="panel div-controls-panel">
+                <h2 class="section-title" style="margin-top:0">🔍 Divergence Scanner</h2>
+                <p class="section-desc">Find which pair diverges the most — consistently across many windows, not just
+                    one starting point.</p>
+
+                <div class="div-form-grid">
+
+                    <!-- Symbol List -->
+                    <div class="div-form-col">
+                        <label class="div-label">Symbols (2–10)</label>
+
+                        <!-- Quick-select preset chips -->
+                        <div class="div-preset-chips" id="div-preset-chips">
+                            <!-- Forex presets -->
+                            <span class="div-chip-group-label">Forex:</span>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('EURUSDm')">EURUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('GBPUSDm')">GBPUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('USDJPYm')">USDJPYm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('USDCHFm')">USDCHFm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('AUDUSDm')">AUDUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('XAUUSDm')">XAUUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('XAGUSDm')">XAGUSDm</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('US30m')">US30m</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('NAS100m')">NAS100m</button>
+                            <!-- Crypto presets -->
+                            <span class="div-chip-group-label" style="margin-left:8px">Crypto:</span>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('BTCUSDT')">BTCUSDT</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('ETHUSDT')">ETHUSDT</button>
+                            <button class="div-chip" onclick="DivergenceTab.addPreset('SOLUSDT')">SOLUSDT</button>
+                            <!-- Special -->
+                            <span class="div-chip-group-label" style="margin-left:8px">Special:</span>
+                            <button class="div-chip div-chip-baseline" onclick="DivergenceTab.addBaseline()"
+                                title="A flat horizontal line at 1000. Measures pure asset movement with no second-asset noise.">
+                                📏 Baseline
+                            </button>
+                        </div>
+
+                        <div id="div-symbol-list">
+                            <div class="div-symbol-row">
+                                <input type="text" class="input div-symbol-input" placeholder="e.g. EURUSDm" value="">
+                                <button class="btn btn-sm btn-secondary div-remove-btn"
+                                    onclick="DivergenceTab.removeSymbol(this)">−</button>
+                            </div>
+                            <div class="div-symbol-row">
+                                <input type="text" class="input div-symbol-input" placeholder="e.g. GBPUSDm" value="">
+                                <button class="btn btn-sm btn-secondary div-remove-btn"
+                                    onclick="DivergenceTab.removeSymbol(this)">−</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-secondary" id="div-add-symbol" onclick="DivergenceTab.addSymbol()"
+                            style="margin-top:8px;width:auto">
+                            + Add Symbol
+                        </button>
+                    </div>
+
+                    <!-- Time Settings -->
+                    <div class="div-form-col">
+                        <div class="input-group">
+                            <label for="div-timeframe">Timeframe</label>
+                            <select id="div-timeframe" class="input">
+                                <option value="10s">10 Seconds</option>
+                                <option value="30s">30 Seconds</option>
+                                <option value="1min" selected>1 Minute</option>
+                                <option value="5min">5 Minutes</option>
+                                <option value="15min">15 Minutes</option>
+                                <option value="30min">30 Minutes</option>
+                                <option value="1h">1 Hour</option>
+                                <option value="4h">4 Hours</option>
+                                <option value="1D">1 Day</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="div-date">Scan Date</label>
+                            <input type="date" id="div-date" class="input">
+                        </div>
+                        <div class="input-group">
+                            <label for="div-start-time">Start Time (UTC)</label>
+                            <input type="time" id="div-start-time" class="input" value="00:00">
+                        </div>
+                        <div class="input-group">
+                            <label for="div-end-time">End Time (UTC)</label>
+                            <input type="time" id="div-end-time" class="input" value="08:00">
+                        </div>
+                    </div>
+
+                    <!-- Scan Settings -->
+                    <div class="div-form-col">
+                        <div class="input-group">
+                            <label for="div-window-bars">Window Size (bars)</label>
+                            <input type="number" id="div-window-bars" class="input" value="200" min="50" max="1000">
+                        </div>
+
+                        <label class="div-label" style="margin-top:8px">Domain</label>
+                        <div class="div-domain-row">
+                            <label class="div-radio-label">
+                                <input type="radio" name="div-domain" value="forex" checked> Forex (MT5)
+                            </label>
+                            <label class="div-radio-label">
+                                <input type="radio" name="div-domain" value="crypto"> Crypto (Binance)
+                            </label>
+                        </div>
+
+                        <button class="btn btn-accent" id="div-run-btn" style="margin-top:16px"
+                            onclick="App._runDivergenceScan()">
+                            <span class="btn-icon">🔍</span> Run Scan
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="divergence-progress" class="hidden" style="margin-top:16px">
+                <div class="progress-bar-container large">
+                    <div class="progress-bar" id="div-progress-bar"></div>
+                </div>
+                <p class="progress-text" id="div-progress-text">Scanning pairs...</p>
+            </div>
+
+            <!-- Summary Card -->
+            <div id="divergence-summary" class="hidden" style="margin-top:20px"></div>
+
+            <!-- Rankings Table -->
+            <div id="divergence-ranking-container" class="content-section" style="margin-top:24px"></div>
+        </div>
+    </div>
+
+    <!-- Super Test Window Detail Modal -->
+    <div id="st-detail-modal" class="modal hidden">
+        <div class="modal-backdrop" id="st-detail-backdrop"></div>
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h2 id="st-detail-title">Window Detail</h2>
+                    <p id="st-detail-subtitle" class="modal-subtitle"></p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn btn-sm btn-secondary" id="st-detail-download">💾 CSV</button>
+                    <button class="modal-close" id="st-detail-close">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" id="st-detail-body">
+                <!-- Loading state -->
+                <div id="st-detail-loading" class="st-detail-loading">
+                    <div class="st-detail-spinner"></div>
+                    <p>Running analysis for this window...</p>
+                </div>
+
+                <!-- Results (hidden until loaded) -->
+                <div id="st-detail-results" class="hidden">
+                    <!-- Metrics -->
+                    <div id="st-detail-metrics" style="margin-bottom:20px"></div>
+
+                    <!-- Charts row -->
+                    <div class="st-detail-charts">
+                        <div class="st-detail-chart-block">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📈 Asset Index
+                                Correlation</h3>
+                            <div class="chart-wrapper" style="height:280px">
+                                <canvas id="st-detail-chart-corr"></canvas>
+                            </div>
+                        </div>
+                        <div class="st-detail-chart-block">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📉 Index Spread</h3>
+                            <div class="chart-wrapper" style="height:280px">
+                                <canvas id="st-detail-chart-spread"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data table -->
+                    <div style="margin-top:20px">
+                        <h3 class="section-title" style="font-size:.85rem">🗂️ Bar Data</h3>
+                        <div class="table-container" style="max-height:260px">
+                            <table class="data-table" id="st-detail-table">
+                                <thead id="st-detail-table-head"></thead>
+                                <tbody id="st-detail-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Divergence Scanner Pair Detail Modal -->
+    <div id="div-detail-modal" class="modal hidden">
+        <div class="modal-backdrop" id="div-detail-backdrop"></div>
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h2 id="div-detail-title">Pair Metrics</h2>
+                    <p id="div-detail-subtitle" class="modal-subtitle"></p>
+                </div>
+                <button class="modal-close" id="div-detail-close">&times;</button>
+            </div>
+            <div class="modal-body" id="div-detail-body"></div>
+        </div>
+    </div>
+
+    <!-- Divergence Scanner — Window Drill-Down Modal -->
+    <div id="div-window-modal" class="modal hidden">
+        <div class="modal-backdrop" id="div-window-backdrop"></div>
+        <div class="modal-content modal-xxl">
+            <div class="modal-header">
+                <div>
+                    <h2 id="div-window-title">Window Analysis</h2>
+                    <p id="div-window-subtitle" class="modal-subtitle"></p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn btn-sm btn-secondary" id="div-window-download">💾 CSV</button>
+                    <button class="modal-close" id="div-window-close">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+
+                <!-- Loading state -->
+                <div id="div-window-loading" class="st-detail-loading">
+                    <div class="st-detail-spinner"></div>
+                    <p>Loading window analysis...</p>
+                </div>
+
+                <!-- Results -->
+                <div id="div-window-results" class="hidden">
+
+                    <!-- Summary metrics table -->
+                    <div id="div-window-metrics" style="margin-bottom:24px"></div>
+
+                    <!-- Row 1: Index correlation + Spread -->
+                    <div class="st-detail-charts" style="margin-bottom:24px">
+                        <div class="st-detail-chart-block">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📈 Asset Index
+                                Correlation</h3>
+                            <div class="chart-wrapper" style="height:280px">
+                                <canvas id="div-window-chart-corr"></canvas>
+                            </div>
+                        </div>
+                        <div class="st-detail-chart-block">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📉 Index Spread Over
+                                Time</h3>
+                            <div class="chart-wrapper" style="height:280px">
+                                <canvas id="div-window-chart-spread"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Flip loss + Spread distribution -->
+                    <div class="st-detail-charts" style="margin-bottom:24px">
+                        <div class="st-detail-chart-block">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">💥 Flip Loss Over Time
+                            </h3>
+                            <div class="chart-wrapper" style="height:240px">
+                                <canvas id="div-window-chart-fliploss"></canvas>
+                            </div>
+                        </div>
+                        <div class="st-detail-chart-block">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px">📊 Spread Distribution
+                            </h3>
+                            <div class="chart-wrapper" style="height:240px">
+                                <canvas id="div-window-chart-hist"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Position breakdown (centred, half-width) -->
+                    <div style="display:flex;justify-content:center;margin-bottom:24px">
+                        <div style="width:50%">
+                            <h3 class="section-title" style="font-size:.85rem;margin-bottom:6px;text-align:center">🧭
+                                Position Breakdown</h3>
+                            <div class="chart-wrapper" style="height:260px">
+                                <canvas id="div-window-chart-donut"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Full bar data table -->
+                    <div style="margin-top:8px">
+                        <h3 class="section-title" style="font-size:.85rem">🗂️ Bar Data</h3>
+                        <div style="margin-bottom:8px">
+                            <input type="text" id="div-window-search" class="search-input" placeholder="Search..."
+                                style="width:240px">
+                        </div>
+                        <div class="table-container" style="max-height:320px">
+                            <table class="data-table" id="div-window-table">
+                                <thead id="div-window-table-head"></thead>
+                                <tbody id="div-window-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Settings</h2>
+                <button class="modal-close" id="settings-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <h3>MT5 Connection</h3>
+                    <p class="setting-status" id="mt5-status">Checking...</p>
+                </div>
+                <div class="setting-group">
+                    <h3>Binance Connection</h3>
+                    <p class="setting-status" id="binance-status">Checking...</p>
+                </div>
+                <div class="setting-group">
+                    <h3>Cache</h3>
+                    <p class="setting-status" id="cache-status">Checking...</p>
+                    <button class="btn btn-sm btn-danger" id="btn-clear-cache">Clear Cache</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ── Absolute Flip Scanner (standalone overlay tab) ─────── -->
+    <div id="absolute-flip-tab" class="div-scanner-tab hidden">
+        <div class="div-scanner-inner">
+
+            <!-- Controls Panel -->
+            <div class="panel div-controls-panel">
+                <h2 class="section-title" style="margin-top:0">📏 Absolute Flip — Distance-Based Flips</h2>
+                <p class="section-desc">
+                    Operates on raw ticks. A flip is only <strong>confirmed</strong> when the spread travels
+                    &ge; <em>N</em> index points past zero in the new direction.
+                    Phantom oscillations near zero are ignored — only genuine directional moves count.
+                </p>
+
+                <div class="div-form-grid">
+                    <!-- Symbol & settings column -->
+                    <div class="div-form-col">
+                        <div class="input-group">
+                            <label for="af-symbol-1">Asset 1</label>
+                            <input type="text" id="af-symbol-1" class="input" value="XAUUSDm" placeholder="e.g. XAUUSDm">
+                        </div>
+                        <div class="input-group">
+                            <label for="af-symbol-2">Asset 2</label>
+                            <input type="text" id="af-symbol-2" class="input" value="USDJPYm" placeholder="e.g. USDJPYm">
+                        </div>
+                        <div class="input-group">
+                            <label for="af-timeframe">Chart Timeframe (display only)</label>
+                            <select id="af-timeframe" class="input">
+                                <option value="10s">10 Seconds</option>
+                                <option value="30s">30 Seconds</option>
+                                <option value="1min" selected>1 Minute</option>
+                                <option value="5min">5 Minutes</option>
+                                <option value="15min">15 Minutes</option>
+                                <option value="30min">30 Minutes</option>
+                                <option value="1h">1 Hour</option>
+                                <option value="4h">4 Hours</option>
+                                <option value="1D">1 Day</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="af-distance-n">
+                                Distance N (index points)
+                                <span style="cursor:help;opacity:0.6" title="Minimum index-point movement past zero to confirm a flip. E.g. 5.0 = the spread must travel 5 pts beyond zero before the flip is counted.">ⓘ</span>
+                            </label>
+                            <input type="number" id="af-distance-n" class="input" value="5" min="0.01" step="0.01" placeholder="e.g. 5.0">
+                        </div>
+                    </div>
+
+                    <!-- Date/time column -->
+                    <div class="div-form-col">
+                        <div class="input-group">
+                            <label for="af-start-date">Start Date</label>
+                            <input type="date" id="af-start-date" class="input">
+                        </div>
+                        <div class="input-group">
+                            <label for="af-start-time">Start Time (UTC)</label>
+                            <input type="time" id="af-start-time" class="input" value="00:00">
+                        </div>
+                        <div class="input-group">
+                            <label for="af-end-date">End Date</label>
+                            <input type="date" id="af-end-date" class="input">
+                        </div>
+                        <div class="input-group">
+                            <label for="af-end-time">End Time (UTC)</label>
+                            <input type="time" id="af-end-time" class="input" value="23:59">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;display:flex;gap:12px;align-items:center;">
+                    <button class="btn btn-accent" id="af-btn-run">
+                        <span class="btn-icon">&#9654;</span> Run Absolute Flip
+                    </button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('absolute-flip-tab').classList.add('hidden')">
+                        &#10005; Close
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="panel" id="af-results-panel" style="margin-top:16px">
+
+                <!-- Metrics -->
+                <div class="content-section">
+                    <h2 class="section-title">&#128204; Summary Metrics</h2>
+                    <div id="af-metrics-container"></div>
+                </div>
+
+                <!-- Charts -->
+                <div class="content-section">
+                    <h2 class="section-title">&#128200; Asset Index Correlation (Tick-Resampled)</h2>
+                    <div class="chart-wrapper"><canvas id="af-chart-correlation" width="800" height="400"></canvas></div>
+
+                    <h2 class="section-title">&#128201; Index Spread — Distance-Confirmed Flips Marked</h2>
+                    <div class="chart-wrapper"><canvas id="af-chart-spread" width="800" height="300"></canvas></div>
+
+                    <h2 class="section-title">&#128184; Confirmed Flip Loss Over Time</h2>
+                    <div class="chart-wrapper"><canvas id="af-chart-flip-loss" width="800" height="250"></canvas></div>
+
+                    <div class="charts-row">
+                        <div class="chart-half">
+                            <h2 class="section-title">&#128202; Spread Distribution</h2>
+                            <div class="chart-wrapper"><canvas id="af-chart-spread-dist" width="400" height="250"></canvas></div>
+                        </div>
+                        <div class="chart-half">
+                            <h2 class="section-title">&#128260; Position Breakdown</h2>
+                            <div class="chart-wrapper"><canvas id="af-chart-position" width="400" height="250"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Confirmed Flip Events -->
+                <div class="content-section">
+                    <h2 class="section-title">&#128308; Confirmed Flip Events</h2>
+                    <p class="section-desc">
+                        Each row is a flip confirmed at the tick where the spread first reached &ge; N past zero.
+                        Flip Loss = |spread at that tick| (Option A).
+                    </p>
+                    <div id="af-flip-events-container"></div>
+                </div>
+
+                <!-- Bar-level Data Table -->
+                <div class="content-section">
+                    <h2 class="section-title">&#128193; Output Data (Bar Level)</h2>
+                    <div class="table-controls">
+                        <input type="text" id="af-table-search" class="input input-sm" placeholder="Search...">
+                        <button class="btn btn-sm btn-secondary" id="af-btn-download-csv">&#128190; Download CSV</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="af-data-table" class="data-table">
+                            <thead id="af-data-table-head"></thead>
+                            <tbody id="af-data-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="table-pagination" id="af-pagination"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/js/utils/format.js?v=6"></script>
+    <script src="/js/utils/datetime.js?v=6"></script>
+    <script src="/js/api.js?v=6"></script>
+    <script src="/js/ws.js?v=6"></script>
+    <script src="/js/state.js?v=6"></script>
+    <script src="/js/components/charts.js?v=6"></script>
+    <script src="/js/components/tables.js?v=6"></script>
+    <script src="/js/components/sidebar.js?v=6"></script>
+    <script src="/js/components/supertest.js?v=6"></script>
+    <script src="/js/components/progress.js?v=6"></script>
+    <script src="/js/components/modal.js?v=6"></script>
+    <script src="/js/components/divergence.js?v=1"></script>
+    <script src="/js/components/absolute_flip.js?v=1"></script>
+    <script src="/js/app.js?v=6"></script>
+    <script>
+        // ── Divergence Tab Helper (inline — small enough to not warrant a separate file) ──
+        const DivergenceTab = {
+            _tabVisible: false,
+
+            toggle() {
+                this._tabVisible = !this._tabVisible;
+                document.getElementById('divergence-scanner-tab').classList.toggle('hidden', !this._tabVisible);
+                document.getElementById('btn-divergence-tab').classList.toggle('active', this._tabVisible);
+            },
+
+            // Add a blank symbol row
+            addSymbol(value = '') {
+                const list = document.getElementById('div-symbol-list');
+                const count = list.querySelectorAll('.div-symbol-row').length;
+                if (count >= 10) { Toast.show('Maximum 10 symbols', 'info'); return; }
+                const row = document.createElement('div');
+                row.className = 'div-symbol-row';
+                row.innerHTML = `
+                    <input type="text" class="input div-symbol-input"
+                           placeholder="e.g. USDJPYm" value="${value}">
+                    <button class="btn btn-sm btn-secondary div-remove-btn"
+                            onclick="DivergenceTab.removeSymbol(this)">−</button>`;
+                list.appendChild(row);
+            },
+
+            // Add a preset symbol — checks for duplicates first
+            addPreset(symbol) {
+                const existing = Array.from(
+                    document.querySelectorAll('.div-symbol-input')
+                ).map(i => i.value.trim());
+
+                if (existing.includes(symbol)) {
+                    Toast.show(`${symbol} already in list`, 'info');
+                    return;
+                }
+
+                // Fill first empty slot, otherwise add new row
+                const emptyInput = Array.from(
+                    document.querySelectorAll('.div-symbol-input')
+                ).find(i => i.value.trim() === '');
+
+                if (emptyInput) {
+                    emptyInput.value = symbol;
+                } else {
+                    this.addSymbol(symbol);
+                }
+            },
+
+            // Add the special Baseline Line entry
+            addBaseline() {
+                const BASELINE = '__BASELINE__';
+                const existing = Array.from(
+                    document.querySelectorAll('.div-symbol-input')
+                ).map(i => i.value.trim());
+
+                if (existing.includes(BASELINE)) {
+                    Toast.show('Baseline already added — only one allowed', 'info');
+                    return;
+                }
+
+                const list = document.getElementById('div-symbol-list');
+                const count = list.querySelectorAll('.div-symbol-row').length;
+                if (count >= 10) { Toast.show('Maximum 10 symbols', 'info'); return; }
+
+                const row = document.createElement('div');
+                row.className = 'div-symbol-row div-baseline-row';
+                row.innerHTML = `
+                    <input type="text" class="input div-symbol-input div-baseline-input"
+                           value="${BASELINE}" readonly
+                           style="color:var(--accent-purple);font-weight:600;cursor:default"
+                           title="Flat horizontal line — measures pure asset movement">
+                    <span class="div-baseline-badge">📏 Baseline</span>
+                    <button class="btn btn-sm btn-secondary div-remove-btn"
+                            onclick="DivergenceTab.removeSymbol(this)">−</button>`;
+                list.appendChild(row);
+            },
+
+            removeSymbol(btn) {
+                const list = document.getElementById('div-symbol-list');
+                const rows = list.querySelectorAll('.div-symbol-row');
+                if (rows.length <= 2) { Toast.show('Keep at least 2 symbols', 'info'); return; }
+                btn.closest('.div-symbol-row').remove();
+            },
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('btn-divergence-tab').addEventListener('click', () => DivergenceTab.toggle());
+        });
+    </script>
+</body>
+
+</html>

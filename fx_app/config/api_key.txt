@@ -1,0 +1,1 @@
+{"key": "D:\\My Space\\Data\\BTC\\Gann High Low Cross\\XAUUSDm_M1_Cleaned.csv", "saved_on": "2026-02-17T10:52:19.833923"}

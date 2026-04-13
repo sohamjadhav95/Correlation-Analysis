@@ -1,0 +1,11 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pandas>=2.0.0
+numpy>=1.24.0
+statsmodels>=0.14.0
+scipy>=1.10.0
+python-multipart>=0.0.6
+# hmmlearn is optional — requires Microsoft C++ Build Tools on Windows.
+# If installed, enables HMM regime detection. If absent, ADX-only filtering is used instead.
+# To install: pip install hmmlearn  (after installing C++ Build Tools from visualstudio.microsoft.com)
+ 

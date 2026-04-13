@@ -1,0 +1,105 @@
+/* ── Chart Styles ─────────────────────────────────────── */
+
+.chart-wrapper {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+    position: relative;
+    margin-bottom: var(--sp-4);
+    transition: border-color var(--transition-fast);
+}
+
+.chart-wrapper:hover {
+    border-color: var(--border-active);
+}
+
+.chart-wrapper canvas {
+    width: 100% !important;
+    height: auto !important;
+    display: block;
+}
+
+/* Chart Tooltip */
+.chart-tooltip {
+    position: absolute;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: var(--sp-2) var(--sp-3);
+    font-size: var(--font-xs);
+    color: var(--text-primary);
+    pointer-events: none;
+    z-index: 50;
+    box-shadow: var(--shadow-md);
+    white-space: nowrap;
+    transition: opacity 0.15s ease;
+}
+
+.chart-tooltip .tt-label {
+    color: var(--text-muted);
+    margin-bottom: var(--sp-1);
+}
+
+.chart-tooltip .tt-value {
+    font-weight: 600;
+}
+
+.chart-tooltip .tt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-4);
+}
+
+.chart-tooltip .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+/* Chart Legend */
+.chart-legend {
+    display: flex;
+    gap: var(--sp-4);
+    justify-content: center;
+    margin-top: var(--sp-2);
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+}
+
+.legend-dot {
+    width: 10px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+/* Crosshair */
+.chart-crosshair-v {
+    position: absolute;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+    top: 0;
+    bottom: 0;
+}
+
+.chart-crosshair-h {
+    position: absolute;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+    left: 0;
+    right: 0;
+}
+
+.chart-half {
+    min-width: 0;
+}

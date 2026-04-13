@@ -1,0 +1,38 @@
+//@version=5
+indicator("BTC vs ETH Stats [Mean Reversion]", shorttitle="BTC-ETH Stats", overlay=false)
+
+// Inputs
+plot_mode = input.string("Per_Diff vs Avg_10", title="Display Mode", options=["Per_Diff vs Avg_10", "BTC_Per vs ETH_Per"])
+sym_btc = input.symbol("BINANCE:BTCUSDT", title="Bitcoin Symbol")
+sym_eth = input.symbol("BINANCE:ETHUSDT", title="Ethereum Symbol")
+ma_length = input.int(10, title="Moving Average Length (Avg_10)")
+roc_length = input.int(1, title="Percentage Return Length (Bars)", tooltip="1 for standard bar-by-bar return")
+
+// Fetch prices from the exact same timeframes
+btc_close = request.security(sym_btc, timeframe.period, close)
+eth_close = request.security(sym_eth, timeframe.period, close)
+
+// Calculate the Percentage Returns (Rate of Change)
+// Note: ta.roc returns the percentage change.
+btc_per = ta.roc(btc_close, roc_length)
+eth_per = ta.roc(eth_close, roc_length)
+
+// Calculate Per_Diff (Difference in their returns)
+per_diff = btc_per - eth_per
+
+// Calculate Avg_10 (Moving Average of the Per_Diff)
+avg_10 = ta.sma(per_diff, ma_length)
+
+// Determine what to plot based on the selected mode
+plot1_val = plot_mode == "Per_Diff vs Avg_10" ? per_diff : btc_per
+plot2_val = plot_mode == "Per_Diff vs Avg_10" ? avg_10 : eth_per
+
+plot1_color = plot_mode == "Per_Diff vs Avg_10" ? color.blue : color.green
+plot2_color = plot_mode == "Per_Diff vs Avg_10" ? color.orange : color.red
+
+// Plotting 
+plot(plot1_val, title="Line 1", color=plot1_color, linewidth=2)
+plot(plot2_val, title="Line 2", color=plot2_color, linewidth=2)
+
+// Baseline representing 0 difference
+hline(0, title="Zero Line", color=color.gray, linestyle=hline.style_dashed)
