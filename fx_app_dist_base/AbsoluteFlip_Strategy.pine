@@ -1,0 +1,185 @@
+//@version=5
+// ==================================================================
+// Absolute Flip Strategy - Distance-Based Correlation Flip Detection
+// Mirrors the "Absolute Flip" tab of the FX Correlation Platform.
+//
+// KNOWN DIFFERENCE vs Python app:
+//   Python works on RAW TICKS. Pine works on BARS (one close/candle).
+//   Flip counts may differ slightly. All logic and formulas identical.
+//   For closest match: use 1-minute timeframe.
+// ==================================================================
+
+strategy("Absolute Flip Distance-Based Correlation Strategy", shorttitle="AbsFlip", overlay=false, default_qty_type=strategy.percent_of_equity, default_qty_value=100, pyramiding=0, commission_type=strategy.commission.percent, commission_value=0.0)
+
+// ------------------------------------------------------------------
+// INPUTS
+// ------------------------------------------------------------------
+
+asset2          = input.symbol("USDJPY",                              title="Asset 2 (Asset 1 = this chart)",         group="Assets")
+distance_n      = input.float(5.0, minval=0.01, step=0.01,           title="Distance N (index pts to confirm flip)", group="Flip Settings")
+use_date_filter = input.bool(false,                                   title="Enable date/time filter",                group="Date Filter (UTC)")
+start_date      = input.time(timestamp("2024-01-01 00:00 UTC"),       title="Start Date and Time (UTC)",              group="Date Filter (UTC)")
+end_date        = input.time(timestamp("2024-12-31 23:59 UTC"),       title="End Date and Time (UTC)",                group="Date Filter (UTC)")
+show_spread      = input.bool(true,  title="Show Index Spread",       group="Display")
+show_index_lines = input.bool(true,  title="Show Index 1 and Index 2",group="Display")
+show_conf_zone   = input.bool(true,  title="Show Confirmation Bands", group="Display")
+
+// ------------------------------------------------------------------
+// FETCH SECOND SYMBOL
+// ------------------------------------------------------------------
+
+float close2 = request.security(asset2, timeframe.period, close, lookahead=barmerge.lookahead_off)
+
+// ------------------------------------------------------------------
+// DATE FILTER
+// ------------------------------------------------------------------
+
+bool in_window = use_date_filter ? (time >= start_date and time <= end_date) : true
+
+// ------------------------------------------------------------------
+// CUMULATIVE % INDEX (base 1000)
+// idx(t) = 1000 x product(1 + pct_change_i)
+// Index resets to 1000 on first bar of the selected window,
+// matching the Python engine behaviour.
+// ------------------------------------------------------------------
+
+var float idx1           = na
+var float idx2           = na
+var bool  window_started = false
+
+bool first_bar = use_date_filter ? (time >= start_date and time <= end_date and not window_started) : (bar_index == 0)
+
+if first_bar
+    window_started := true
+    idx1 := 1000.0
+    idx2 := 1000.0
+else if in_window or not use_date_filter
+    float r1 = close  / close [1] - 1.0
+    float r2 = close2 / close2[1] - 1.0
+    idx1 := nz(idx1[1], 1000.0) * (1.0 + r1)
+    idx2 := nz(idx2[1], 1000.0) * (1.0 + r2)
+
+float spread = nz(idx1, 1000.0) - nz(idx2, 1000.0)
+
+// ------------------------------------------------------------------
+// DISTANCE-BASED FLIP STATE MACHINE
+//
+// Exactly mirrors detect_distance_flips() in absolute_flip.py:
+//   STABLE  -> zero-crossing detected  -> PENDING
+//   PENDING -> spread >= +N            -> CONFIRMED LONG1
+//   PENDING -> spread <= -N            -> CONFIRMED SHORT1
+//   PENDING -> re-cross before N       -> back to STABLE (cancelled)
+//
+// cur_pos:  1 = LONG Asset1 / SHORT Asset2  (spread >= 0)
+//          -1 = SHORT Asset1 / LONG Asset2  (spread < 0)
+// ------------------------------------------------------------------
+
+var int   cur_pos         = na
+var bool  pending         = false
+var bool  pending_to_long = false
+var bool  sm_init         = false
+var bool  confirmed_flip  = false
+var float flip_loss       = 0.0
+
+confirmed_flip := false
+flip_loss      := 0.0
+
+// Initialise state machine on first bar of the active window
+if first_bar
+    cur_pos := spread >= 0 ? 1 : -1
+    pending := false
+    sm_init := true
+
+// Run state machine only inside the analysis window
+if sm_init and in_window and not first_bar
+    if not pending
+        int implied = spread >= 0 ? 1 : -1
+        if implied != cur_pos
+            pending         := true
+            pending_to_long := implied == 1
+    else
+        if pending_to_long
+            if spread >= distance_n
+                confirmed_flip := true
+                flip_loss      := math.abs(spread)
+                cur_pos        := 1
+                pending        := false
+            else if spread < 0
+                pending := false
+        else
+            if spread <= -distance_n
+                confirmed_flip := true
+                flip_loss      := math.abs(spread)
+                cur_pos        := -1
+                pending        := false
+            else if spread >= 0
+                pending := false
+
+// ------------------------------------------------------------------
+// STRATEGY ENTRIES / EXITS
+// ------------------------------------------------------------------
+
+if in_window and confirmed_flip
+    if cur_pos == 1
+        strategy.close("Short A1", comment="Flip to Long")
+        strategy.entry("Long A1",  strategy.long,  comment="Confirmed Flip L")
+    else
+        strategy.close("Long A1",  comment="Flip to Short")
+        strategy.entry("Short A1", strategy.short, comment="Confirmed Flip S")
+
+// ------------------------------------------------------------------
+// PLOTS
+// ------------------------------------------------------------------
+
+plot(show_index_lines ? idx1 : na, title="Index 1 (Asset 1)", color=color.new(color.teal, 20),   linewidth=1)
+plot(show_index_lines ? idx2 : na, title="Index 2 (Asset 2)", color=color.new(color.orange, 20), linewidth=1)
+
+hline(1000, "Base 1000",  color=color.new(color.gray, 60), linestyle=hline.style_dotted)
+hline(0,    "Zero Spread",color=color.new(color.white,50), linestyle=hline.style_dashed)
+
+color spreadCol = spread >= 0 ? color.new(color.lime, 20) : color.new(color.red, 20)
+plot(show_spread ? spread : na, title="Index Spread", color=spreadCol, linewidth=2, display=display.pane)
+
+float upper_band = show_conf_zone ?  distance_n : na
+float lower_band = show_conf_zone ? -distance_n : na
+plot(upper_band, title="+N Band", color=color.new(color.yellow,50), linewidth=1, style=plot.style_linebr)
+plot(lower_band, title="-N Band", color=color.new(color.yellow,50), linewidth=1, style=plot.style_linebr)
+
+plotshape(confirmed_flip and cur_pos ==  1, title="Flip Long",  location=location.belowbar, style=shape.triangleup,   color=color.new(color.lime,0), size=size.small, text="Flip")
+plotshape(confirmed_flip and cur_pos == -1, title="Flip Short", location=location.abovebar, style=shape.triangledown, color=color.new(color.red, 0), size=size.small, text="Flip")
+
+bgcolor(cur_pos == 1 ? color.new(color.teal,92) : cur_pos == -1 ? color.new(color.red,92) : na, title="Position Background")
+
+// ------------------------------------------------------------------
+// INFO TABLE
+// ------------------------------------------------------------------
+
+var table info_tbl = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black,70), border_color=color.new(color.gray,40), border_width=1, frame_color=color.new(color.gray,40), frame_width=1)
+
+var int   total_flips     = 0
+var float total_flip_loss = 0.0
+var float max_flip_loss   = 0.0
+var float max_spread_seen = 0.0
+
+if confirmed_flip
+    total_flips     += 1
+    total_flip_loss += flip_loss
+    max_flip_loss   := math.max(max_flip_loss, flip_loss)
+
+max_spread_seen := math.max(max_spread_seen, math.abs(spread))
+
+if barstate.islast
+    table.cell(info_tbl, 0, 0, "Metric",          bgcolor=color.new(color.navy,40), text_color=color.white,  text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 0, "Value",            bgcolor=color.new(color.navy,40), text_color=color.white,  text_halign=text.align_right, text_size=size.small)
+    table.cell(info_tbl, 0, 1, "Asset 2",          text_color=color.silver, text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 1, asset2,             text_color=color.orange, text_halign=text.align_right, text_size=size.small)
+    table.cell(info_tbl, 0, 2, "Distance N",       text_color=color.silver, text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 2, str.tostring(distance_n,"#.####"),     text_color=color.yellow, text_halign=text.align_right, text_size=size.small)
+    table.cell(info_tbl, 0, 3, "Confirmed Flips",  text_color=color.silver, text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 3, str.tostring(total_flips),             text_color=color.lime,   text_halign=text.align_right, text_size=size.small)
+    table.cell(info_tbl, 0, 4, "Total Flip Loss",  text_color=color.silver, text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 4, str.tostring(total_flip_loss,"#.####"),text_color=color.red,    text_halign=text.align_right, text_size=size.small)
+    table.cell(info_tbl, 0, 5, "Max Flip Loss",    text_color=color.silver, text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 5, str.tostring(max_flip_loss,"#.####"),  text_color=color.red,    text_halign=text.align_right, text_size=size.small)
+    table.cell(info_tbl, 0, 6, "Max Spread",       text_color=color.silver, text_halign=text.align_left,  text_size=size.small)
+    table.cell(info_tbl, 1, 6, str.tostring(max_spread_seen,"#.####"),text_color=color.aqua,   text_halign=text.align_right, text_size=size.small)
