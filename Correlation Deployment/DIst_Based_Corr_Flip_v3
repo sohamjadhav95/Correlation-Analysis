@@ -1,0 +1,565 @@
+
+
+"""
+Continuous Relative Distance Strategy — MT5 Live Engine
+=======================================================
+
+Architecture:
+- Event-driven
+- Tick-based
+- No timeframe dependency
+- Continuous normalized relative indices
+- Immediate threshold flip logic
+
+Strategy:
+LONG1  = BUY SYMBOL_1 + SELL SYMBOL_2
+SHORT1 = SELL SYMBOL_1 + BUY SYMBOL_2
+
+Flip Rules:
+- LONG1  -> SHORT1 when spread <= -DISTANCE_N
+- SHORT1 -> LONG1  when spread >= +DISTANCE_N
+
+Supports:
+- Trading both assets
+- Trading only one asset (other still used for index logic)
+- CSV logging for replay and analytics
+"""
+
+# =========================================================
+# SECTION 1 — CONFIGURATION
+# =========================================================
+
+MT5_LOGIN    = 12345678
+MT5_PASSWORD = "PASSWORD"
+MT5_SERVER   = "Broker-Server"
+MT5_PATH     = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+
+# Assets
+SYMBOL_1 = "XAUUSDm"
+SYMBOL_2 = "BTCUSDm"
+
+# Lot sizes
+# Set either to 0 to disable execution for that asset
+LOT_1 = 0.01
+LOT_2 = 0.01
+
+# Flip threshold
+DISTANCE_N = 1.0
+
+# Execution
+DEVIATION = 20
+MAGIC     = 987654
+
+# Poll interval
+POLL_INTERVAL_MS = 50
+
+# Logging
+CSV_LOG_FILE   = "strategy_ticks.csv"
+EVENT_LOG_FILE = "strategy_events.csv"
+
+# =========================================================
+# SECTION 2 — IMPORTS
+# =========================================================
+
+import csv
+import os
+import sys
+import time
+import signal
+import logging
+import datetime
+from typing import Optional
+
+try:
+    import MetaTrader5 as mt5
+except ImportError:
+    print("Install MetaTrader5 package:")
+    print("pip install MetaTrader5")
+    sys.exit(1)
+
+# =========================================================
+# SECTION 3 — LOGGER
+# =========================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+logger = logging.getLogger("relative_distance")
+
+# =========================================================
+# SECTION 4 — CSV LOGGER
+# =========================================================
+
+class CSVLogger:
+
+    def __init__(self, tick_file: str, event_file: str):
+        self.tick_file = tick_file
+        self.event_file = event_file
+
+        self._initialize_files()
+
+    def _initialize_files(self):
+
+        if not os.path.exists(self.tick_file):
+            with open(self.tick_file, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "timestamp",
+                    "updated_symbol",
+                    "price1",
+                    "price2",
+                    "idx1",
+                    "idx2",
+                    "spread",
+                    "state",
+                    "flip"
+                ])
+
+        if not os.path.exists(self.event_file):
+            with open(self.event_file, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "timestamp",
+                    "event_type",
+                    "message"
+                ])
+
+    def log_tick(
+        self,
+        updated_symbol,
+        price1,
+        price2,
+        idx1,
+        idx2,
+        spread,
+        state,
+        flip
+    ):
+
+        with open(self.tick_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                datetime.datetime.now().isoformat(),
+                updated_symbol,
+                round(price1, 5),
+                round(price2, 5),
+                round(idx1, 5),
+                round(idx2, 5),
+                round(spread, 5),
+                state,
+                flip
+            ])
+
+    def log_event(self, event_type, message):
+
+        with open(self.event_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                datetime.datetime.now().isoformat(),
+                event_type,
+                message
+            ])
+
+# =========================================================
+# SECTION 5 — MT5 CONNECTION
+# =========================================================
+
+
+def connect_mt5():
+
+    logger.info("Connecting to MT5...")
+
+    if not mt5.initialize(path=MT5_PATH):
+        raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
+
+    if not mt5.login(
+        login=MT5_LOGIN,
+        password=MT5_PASSWORD,
+        server=MT5_SERVER
+    ):
+        raise RuntimeError(f"MT5 login failed: {mt5.last_error()}")
+
+    logger.info("MT5 connected successfully")
+
+    for symbol in [SYMBOL_1, SYMBOL_2]:
+        if not mt5.symbol_select(symbol, True):
+            raise RuntimeError(f"Failed to select symbol: {symbol}")
+
+
+def disconnect_mt5():
+    mt5.shutdown()
+    logger.info("MT5 disconnected")
+
+# =========================================================
+# SECTION 6 — INDEX ENGINE
+# =========================================================
+
+class RelativeIndexEngine:
+
+    def __init__(self):
+
+        self.idx1 = 1000.0
+        self.idx2 = 1000.0
+
+        self.price1 = None
+        self.price2 = None
+
+        self.prev1 = None
+        self.prev2 = None
+
+        self.initialized = False
+
+    def update(self, which: int, price: float):
+
+        if which == 1:
+            self.price1 = price
+        else:
+            self.price2 = price
+
+        if self.price1 is None or self.price2 is None:
+            return False
+
+        if not self.initialized:
+
+            self.prev1 = self.price1
+            self.prev2 = self.price2
+
+            self.initialized = True
+            return True
+
+        if which == 1:
+
+            r = (price - self.prev1) / self.prev1
+            self.idx1 = self.idx1 * (1 + r)
+            self.prev1 = price
+
+        else:
+
+            r = (price - self.prev2) / self.prev2
+            self.idx2 = self.idx2 * (1 + r)
+            self.prev2 = price
+
+        return True
+
+    @property
+    def spread(self):
+        return self.idx1 - self.idx2
+
+# =========================================================
+# SECTION 7 — STATE MACHINE
+# =========================================================
+
+class DistanceStateMachine:
+
+    def __init__(self, distance_n: float):
+
+        self.distance_n = distance_n
+        self.current_state = "LONG1"
+
+    def evaluate(self, spread: float):
+
+        if self.current_state == "LONG1":
+
+            if spread <= -self.distance_n:
+                self.current_state = "SHORT1"
+                return "SHORT1"
+
+        elif self.current_state == "SHORT1":
+
+            if spread >= self.distance_n:
+                self.current_state = "LONG1"
+                return "LONG1"
+
+        return None
+
+# =========================================================
+# SECTION 8 — EXECUTION ENGINE
+# =========================================================
+
+class ExecutionEngine:
+
+    def __init__(self):
+
+        self.pos1_ticket = None
+        self.pos2_ticket = None
+
+        self.pos1_type = None
+        self.pos2_type = None
+
+    def _send_market_order(self, symbol, direction, lot, comment):
+
+        if lot <= 0:
+            return None
+
+        tick = mt5.symbol_info_tick(symbol)
+
+        if tick is None:
+            raise RuntimeError(f"No tick for {symbol}")
+
+        order_type = (
+            mt5.ORDER_TYPE_BUY
+            if direction == "BUY"
+            else mt5.ORDER_TYPE_SELL
+        )
+
+        price = tick.ask if direction == "BUY" else tick.bid
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": float(lot),
+            "type": order_type,
+            "price": price,
+            "deviation": DEVIATION,
+            "magic": MAGIC,
+            "comment": comment,
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+
+        result = mt5.order_send(request)
+
+        if result is None:
+            raise RuntimeError("order_send returned None")
+
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            raise RuntimeError(f"Order failed: {result.retcode}")
+
+        return result.order
+
+    def _close_position(self, ticket, symbol, pos_type, lot):
+
+        if ticket is None:
+            return
+
+        close_direction = "SELL" if pos_type == "BUY" else "BUY"
+
+        tick = mt5.symbol_info_tick(symbol)
+
+        price = tick.bid if pos_type == "BUY" else tick.ask
+
+        order_type = (
+            mt5.ORDER_TYPE_SELL
+            if close_direction == "SELL"
+            else mt5.ORDER_TYPE_BUY
+        )
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": float(lot),
+            "type": order_type,
+            "position": ticket,
+            "price": price,
+            "deviation": DEVIATION,
+            "magic": MAGIC,
+            "comment": "flip_close",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+
+        result = mt5.order_send(request)
+
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            raise RuntimeError(f"Close failed: {result.retcode}")
+
+    def execute_flip(self, state: str):
+
+        logger.info(f"Executing flip -> {state}")
+
+        # Close existing positions
+
+        if self.pos1_ticket is not None and LOT_1 > 0:
+            self._close_position(
+                self.pos1_ticket,
+                SYMBOL_1,
+                self.pos1_type,
+                LOT_1
+            )
+
+        if self.pos2_ticket is not None and LOT_2 > 0:
+            self._close_position(
+                self.pos2_ticket,
+                SYMBOL_2,
+                self.pos2_type,
+                LOT_2
+            )
+
+        self.pos1_ticket = None
+        self.pos2_ticket = None
+
+        # Determine directions
+
+        if state == "LONG1":
+            dir1 = "BUY"
+            dir2 = "SELL"
+        else:
+            dir1 = "SELL"
+            dir2 = "BUY"
+
+        # Open new positions
+
+        if LOT_1 > 0:
+            self.pos1_ticket = self._send_market_order(
+                SYMBOL_1,
+                dir1,
+                LOT_1,
+                state
+            )
+            self.pos1_type = dir1
+
+        if LOT_2 > 0:
+            self.pos2_ticket = self._send_market_order(
+                SYMBOL_2,
+                dir2,
+                LOT_2,
+                state
+            )
+            self.pos2_type = dir2
+
+# =========================================================
+# SECTION 9 — MAIN ENGINE
+# =========================================================
+
+class StrategyEngine:
+
+    def __init__(self):
+
+        self.index_engine = RelativeIndexEngine()
+        self.state_machine = DistanceStateMachine(DISTANCE_N)
+        self.execution = ExecutionEngine()
+
+        self.csv_logger = CSVLogger(
+            CSV_LOG_FILE,
+            EVENT_LOG_FILE
+        )
+
+        self.last_tick_1 = 0
+        self.last_tick_2 = 0
+
+        self.initial_position_opened = False
+
+    def process_tick(self, which: int, symbol: str, price: float):
+
+        ready = self.index_engine.update(which, price)
+
+        if not ready:
+            return
+
+        spread = self.index_engine.spread
+
+        flip = self.state_machine.evaluate(spread)
+
+        self.csv_logger.log_tick(
+            updated_symbol=symbol,
+            price1=self.index_engine.price1,
+            price2=self.index_engine.price2,
+            idx1=self.index_engine.idx1,
+            idx2=self.index_engine.idx2,
+            spread=spread,
+            state=self.state_machine.current_state,
+            flip=flip if flip else ""
+        )
+
+        # Initial position
+
+        if not self.initial_position_opened:
+
+            self.execution.execute_flip(
+                self.state_machine.current_state
+            )
+
+            self.initial_position_opened = True
+
+            self.csv_logger.log_event(
+                "INITIAL_POSITION",
+                self.state_machine.current_state
+            )
+
+        # Flip execution
+
+        if flip:
+
+            self.csv_logger.log_event(
+                "FLIP",
+                f"Spread={spread:.4f} -> {flip}"
+            )
+
+            self.execution.execute_flip(flip)
+
+    def run(self):
+
+        logger.info("Starting strategy engine...")
+
+        while True:
+
+            try:
+
+                tick1 = mt5.symbol_info_tick(SYMBOL_1)
+                tick2 = mt5.symbol_info_tick(SYMBOL_2)
+
+                # SYMBOL 1
+                if tick1 and tick1.time_msc > self.last_tick_1:
+
+                    self.last_tick_1 = tick1.time_msc
+
+                    mid1 = (tick1.bid + tick1.ask) / 2
+
+                    self.process_tick(
+                        which=1,
+                        symbol=SYMBOL_1,
+                        price=mid1
+                    )
+
+                # SYMBOL 2
+                if tick2 and tick2.time_msc > self.last_tick_2:
+
+                    self.last_tick_2 = tick2.time_msc
+
+                    mid2 = (tick2.bid + tick2.ask) / 2
+
+                    self.process_tick(
+                        which=2,
+                        symbol=SYMBOL_2,
+                        price=mid2
+                    )
+
+                time.sleep(POLL_INTERVAL_MS / 1000)
+
+            except Exception as e:
+
+                logger.exception(f"Main loop error: {e}")
+                time.sleep(1)
+
+# =========================================================
+# SECTION 10 — SHUTDOWN
+# =========================================================
+
+engine = None
+
+
+def shutdown(*_):
+
+    logger.info("Shutdown requested")
+
+    disconnect_mt5()
+
+    sys.exit(0)
+
+# =========================================================
+# SECTION 11 — ENTRY POINT
+# =========================================================
+
+if __name__ == "__main__":
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    connect_mt5()
+
+    engine = StrategyEngine()
+
+    engine.run()
