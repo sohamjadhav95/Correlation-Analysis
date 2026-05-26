@@ -136,6 +136,8 @@ csv_writer = csv.writer(f)
 
 # All Parameters ========================================================================================
 
+START_TIME = "2026-05-25 00:00:00"
+
 SYMBOL_1 = "XAUUSDm"
 SYMBOL_2 = "USDJPYm"
 
@@ -166,6 +168,13 @@ Prev_Asset_2_CMP = get_current_tick(SYMBOL_2)
 
 
 # MAIN LOOP =============================================================================================
+
+print(f"Waiting for start time {START_TIME}")
+while datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] < START_TIME:
+    print(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
+    time.sleep(0.05)
+
+print("Start time reached")
 
 while True:
     time.sleep(0.05)  # Sleep for 50ms
