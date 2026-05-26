@@ -136,7 +136,8 @@ csv_writer = csv.writer(f)
 
 # All Parameters ========================================================================================
 
-START_TIME = "2026-05-25 00:00:00"
+# Format: (Year, Month, Day, Hour, Minute, Second)
+START_TIME = 2026, 5, 26, 13, 11, 1
 
 SYMBOL_1 = "XAUUSDm"
 SYMBOL_2 = "USDJPYm"
@@ -154,12 +155,6 @@ INDEX_2 = 1000
 BUY = mt5.ORDER_TYPE_BUY
 SELL = mt5.ORDER_TYPE_SELL
 
-# Only open initial positions if we don't have any open already
-if len(mt5.positions_get(symbol=SYMBOL_1)) == 0:
-    send_order(SYMBOL_1, LOT_SIZE_1, BUY, "Initial Position")
-if len(mt5.positions_get(symbol=SYMBOL_2)) == 0:
-    send_order(SYMBOL_2, LOT_SIZE_2, SELL, "Initial Position")
-
 asset_1_position = "Buy"
 asset_2_position = "Sell"
 
@@ -169,60 +164,64 @@ Prev_Asset_2_CMP = get_current_tick(SYMBOL_2)
 
 # MAIN LOOP =============================================================================================
 
-print(f"Waiting for start time {START_TIME}")
-while datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] < START_TIME:
-    print(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
-    time.sleep(0.05)
-
-print("Start time reached")
 
 while True:
-    time.sleep(0.05)  # Sleep for 50ms
-    
-    current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    FLIP = "No Flip"
-    loss = 0
+    if datetime.utcnow() > datetime(*START_TIME):
+        print("Waiting Time Ended, Starting Main Loop")
 
-    Asset_1_CMP = get_current_tick(SYMBOL_1)
-    Asset_2_CMP = get_current_tick(SYMBOL_2)
+        # Only open initial positions if we don't have any open already
+        if len(mt5.positions_get(symbol=SYMBOL_1)) == 0:
+            send_order(SYMBOL_1, LOT_SIZE_1, BUY, "Initial Position")
+        if len(mt5.positions_get(symbol=SYMBOL_2)) == 0:
+            send_order(SYMBOL_2, LOT_SIZE_2, SELL, "Initial Position")
 
-    INDEX_1 = INDEX_1 * (Asset_1_CMP / Prev_Asset_1_CMP)
-    INDEX_2 = INDEX_2 * (Asset_2_CMP / Prev_Asset_2_CMP)
-
-    if asset_1_position == "Buy":
-        if (INDEX_2 - INDEX_1) > DISTANCE_N:
-            close_all_positions()
-            time.sleep(0.05)
-            send_order(SYMBOL_1, LOT_SIZE_1, SELL, "Flip")
-            send_order(SYMBOL_2, LOT_SIZE_2, BUY, "Flip")
-            asset_1_position = "Sell"
-            asset_2_position = "Buy"
-            FLIP = "Flip occured"
-            loss = (INDEX_2 - INDEX_1)
+        while True:
+            time.sleep(0.05)  # Sleep for 50ms
             
-    elif asset_1_position == "Sell":
-        if (INDEX_1 - INDEX_2) > DISTANCE_N:
-            close_all_positions()
-            time.sleep(0.05)
-            send_order(SYMBOL_1, LOT_SIZE_1, BUY, "Flip")
-            send_order(SYMBOL_2, LOT_SIZE_2, SELL, "Flip")
-            asset_1_position = "Buy"
-            asset_2_position = "Sell"
-            FLIP = "Flip occured"
-            loss = (INDEX_1 - INDEX_2)
+            current_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            FLIP = "No Flip"
+            loss = 0
 
-    Prev_Asset_1_CMP = Asset_1_CMP
-    Prev_Asset_2_CMP = Asset_2_CMP
+            Asset_1_CMP = get_current_tick(SYMBOL_1)
+            Asset_2_CMP = get_current_tick(SYMBOL_2)
+
+            INDEX_1 = INDEX_1 * (Asset_1_CMP / Prev_Asset_1_CMP)
+            INDEX_2 = INDEX_2 * (Asset_2_CMP / Prev_Asset_2_CMP)
+
+            if asset_1_position == "Buy":
+                if (INDEX_2 - INDEX_1) > DISTANCE_N:
+                    close_all_positions()
+                    time.sleep(0.05)
+                    send_order(SYMBOL_1, LOT_SIZE_1, SELL, "Flip")
+                    send_order(SYMBOL_2, LOT_SIZE_2, BUY, "Flip")
+                    asset_1_position = "Sell"
+                    asset_2_position = "Buy"
+                    FLIP = "Flip occured"
+                    loss = (INDEX_2 - INDEX_1)
+                    
+            elif asset_1_position == "Sell":
+                if (INDEX_1 - INDEX_2) > DISTANCE_N:
+                    close_all_positions()
+                    time.sleep(0.05)
+                    send_order(SYMBOL_1, LOT_SIZE_1, BUY, "Flip")
+                    send_order(SYMBOL_2, LOT_SIZE_2, SELL, "Flip")
+                    asset_1_position = "Buy"
+                    asset_2_position = "Sell"
+                    FLIP = "Flip occured"
+                    loss = (INDEX_1 - INDEX_2)
+
+            Prev_Asset_1_CMP = Asset_1_CMP
+            Prev_Asset_2_CMP = Asset_2_CMP
 
 
-    csv_logging(csv_writer, 
-    current_time, 
-    SYMBOL_1, SYMBOL_2, 
-    f"{SYMBOL_1} - {asset_1_position}, {SYMBOL_2} - {asset_2_position}", 
-    round(Asset_1_CMP, 4), round(Asset_2_CMP, 4), 
-    round(INDEX_1, 2), round(INDEX_2, 2), 
-    round(INDEX_2 - INDEX_1, 2), 
-    FLIP, round(loss, 2))
+            csv_logging(csv_writer, 
+            current_time, 
+            SYMBOL_1, SYMBOL_2, 
+            f"{SYMBOL_1} - {asset_1_position}, {SYMBOL_2} - {asset_2_position}", 
+            round(Asset_1_CMP, 4), round(Asset_2_CMP, 4), 
+            round(INDEX_1, 2), round(INDEX_2, 2), 
+            round(INDEX_2 - INDEX_1, 2), 
+            FLIP, round(loss, 2))
 
 
 
